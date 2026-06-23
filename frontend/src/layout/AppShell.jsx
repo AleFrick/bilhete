@@ -1,6 +1,5 @@
 const tabs = [
-  { key: 'home', label: 'Home' },
-  { key: 'explore', label: 'Explorar' },
+  { key: 'home', label: 'Explorar' },
   { key: 'bilhetes', label: 'Bilhetes' },
   { key: 'chats', label: 'Conversas' },
   { key: 'profile', label: 'Perfil' },

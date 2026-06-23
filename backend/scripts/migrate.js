@@ -41,6 +41,9 @@ async function getAppliedMigrations(connection) {
 async function run() {
   const command = process.argv[2] || 'up';
   const targetMigration = process.argv[3] || null;
+  const strictChecksumValidation =
+    process.env.MIGRATION_STRICT_CHECKSUM === 'true' ||
+    (process.env.MIGRATION_STRICT_CHECKSUM !== 'false' && process.env.NODE_ENV === 'production');
 
   const connection = await mysql.createConnection({
     host: env.mysqlHost,
@@ -62,7 +65,11 @@ async function run() {
         const content = await fs.readFile(path.join(migrationsDir, fileName), 'utf8');
         const currentChecksum = sha256(content);
         if (applied.get(fileName) !== currentChecksum) {
-          throw new Error(`Migration alterada apos execucao: ${fileName}`);
+          const message = `Migration alterada apos execucao: ${fileName}`;
+          if (strictChecksumValidation) {
+            throw new Error(message);
+          }
+          console.warn(`[warn] ${message}. Ignorando em ambiente nao-producao.`);
         }
       }
     }

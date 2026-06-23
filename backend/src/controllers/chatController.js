@@ -39,13 +39,27 @@ export async function listChats(req, res) {
         m.venue_id as venueId,
         v.name as venueName,
         m.user_1 as user1,
-        m.user_2 as user2
+        m.user_2 as user2,
+        case
+          when m.user_1 = ? then m.user_2
+          else m.user_1
+        end as otherUserId,
+        case
+          when m.user_1 = ? then p2.name
+          else p1.name
+        end as otherUserName,
+        case
+          when m.user_1 = ? then p2.photo_urls
+          else p1.photo_urls
+        end as otherUserPhotos
       from chats c
       join matches m on m.id = c.match_id
       join venues v on v.id = m.venue_id
+      left join profiles p1 on p1.user_id = m.user_1
+      left join profiles p2 on p2.user_id = m.user_2
       where m.user_1 = ? or m.user_2 = ?
       order by c.created_at desc`,
-      [req.user.id, req.user.id]
+      [req.user.id, req.user.id, req.user.id, req.user.id, req.user.id]
     );
 
     return res.json(rows);

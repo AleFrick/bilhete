@@ -9,7 +9,9 @@
     "migrate": "node scripts/migrate.js up",
     "migrate:status": "node scripts/migrate.js status",
     "migrate:dev": "cross-env NODE_ENV=development node scripts/migrate.js up",
-    "migrate:prod": "cross-env NODE_ENV=production node scripts/migrate.js up"
+    "migrate:prod": "cross-env NODE_ENV=production node scripts/migrate.js up",
+    "docker:build": "node scripts/docker.js build",
+    "docker:run": "node scripts/docker.js run"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

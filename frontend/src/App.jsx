@@ -5,7 +5,6 @@ import AppShell from './layout/AppShell';
 import AuthPage from './pages/AuthPage';
 import BilhetesPage from './pages/BilhetesPage';
 import ChatsPage from './pages/ChatsPage';
-import ExplorePage from './pages/ExplorePage';
 import HomePage from './pages/HomePage';
 import ProfilePage from './pages/ProfilePage';
 import { clearSession, loadUser, persistSession } from './state/session';
@@ -233,15 +232,7 @@ export default function App() {
           radar={radar}
           loadingVenues={loadingVenues}
           loadingRadar={loadingRadar}
-          me={me}
-        />
-      );
-    }
-
-    if (activeTab === 'explore') {
-      return (
-        <ExplorePage
-          venues={venues}
+          premiumActive={Boolean(me?.premiumStatus)}
           currentCheckin={currentCheckin}
           people={people}
           loadingPeople={loadingPeople}
@@ -265,6 +256,7 @@ export default function App() {
           selectedChatId={selectedChatId}
           onSelectChat={handleSelectChat}
           onSendMessage={handleSendMessage}
+          currentUserId={me?.id}
         />
       );
     }

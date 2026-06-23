@@ -24,6 +24,7 @@ export default function ExplorePage({
   onCheckout,
   onLoadPeople,
   onSendBilhete,
+  hideVenueList = false,
 }) {
   const [activeScreen, setActiveScreen] = useState('venues');
   const [peopleFilter, setPeopleFilter] = useState('');
@@ -132,7 +133,7 @@ export default function ExplorePage({
 
   return (
     <div className="page-stack explore-mobile">
-      {!currentCheckin ? (
+      {!hideVenueList && !currentCheckin ? (
         <section className="panel">
           <h3>Locais para check-in</h3>
           <ul className="simple-list">
