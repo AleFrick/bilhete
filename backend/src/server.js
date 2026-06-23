@@ -101,7 +101,9 @@ process.on('uncaughtException', (error) => {
 });
 
 async function startServer() {
-  logInfo(`Booting Bilhete backend (port=${env.port}, env=${env.nodeEnv})`);
+  logInfo(
+    `Booting Bilhete backend (port=${env.port}, env=${env.nodeEnv}, envFile=${env.envFile}, db=${env.mysqlDatabase}@${env.mysqlHost}:${env.mysqlPort})`
+  );
 
   try {
     await pool.query('select 1');

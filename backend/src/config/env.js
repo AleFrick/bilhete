@@ -7,6 +7,8 @@ dotenv.config({ path: envPath });
 dotenv.config();
 
 export const env = {
+  nodeEnv: process.env.NODE_ENV || environment,
+  envFile: envPath,
   port: Number(process.env.PORT || 3333),
   jsonBodyLimit: process.env.JSON_BODY_LIMIT || '6mb',
   requestLoggingEnabled: (process.env.REQUEST_LOGGING_ENABLED || 'true') !== 'false',
