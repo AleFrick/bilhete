@@ -1,4 +1,12 @@
-const API_BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:3333/api').replace(/\/$/, '');
+const envApiBaseUrl = import.meta.env.VITE_API_URL;
+const fallbackApiBaseUrl = import.meta.env.DEV ? 'http://localhost:3333/api' : '';
+const resolvedApiBaseUrl = envApiBaseUrl || fallbackApiBaseUrl;
+
+if (!resolvedApiBaseUrl) {
+  throw new Error('VITE_API_URL nao definida para build de producao do frontend.');
+}
+
+const API_BASE_URL = resolvedApiBaseUrl.replace(/\/$/, '');
 
 function getToken() {
   return localStorage.getItem('bilhete.token');
