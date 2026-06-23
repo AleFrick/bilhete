@@ -19,6 +19,24 @@ function compactSql(sql) {
     .slice(0, 180);
 }
 
+function formatErrorDetails(error) {
+  if (!error) {
+    return 'unknown';
+  }
+
+  if (Array.isArray(error.errors) && error.errors.length) {
+    return error.errors
+      .map((item) => {
+        const code = item?.code || 'unknown';
+        const message = item?.message || String(item);
+        return `${code}:${message}`;
+      })
+      .join(' | ');
+  }
+
+  return error?.message || String(error);
+}
+
 async function timedQuery(methodName, args) {
   const startedAt = Date.now();
 
@@ -33,8 +51,10 @@ async function timedQuery(methodName, args) {
     return result;
   } catch (error) {
     const elapsed = Date.now() - startedAt;
+    const code = error?.code || (Array.isArray(error?.errors) && error.errors[0]?.code) || 'unknown';
+    const message = formatErrorDetails(error);
     console.error(
-      `[sql:error] ${elapsed}ms code=${error?.code || 'unknown'} message=${error?.message || 'unknown'}`
+      `[sql:error] ${elapsed}ms code=${code} message=${message}`
     );
     throw error;
   }

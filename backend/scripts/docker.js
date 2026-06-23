@@ -38,6 +38,8 @@ if (action === 'run') {
     '-d',
     '--name',
     containerName,
+    '--add-host',
+    'host.docker.internal:host-gateway',
     '--env-file',
     envFile,
     '-e',
