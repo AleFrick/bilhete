@@ -20,5 +20,8 @@ export const env = {
   mysqlUser: process.env.DB_USER || process.env.MYSQL_USER || 'root',
   mysqlPassword: process.env.DB_PASSWORD || process.env.MYSQL_PASSWORD || '',
   mysqlDatabase: process.env.DB_NAME || process.env.MYSQL_DATABASE || 'bilhete',
+  passwordClientHashEnabled: (process.env.PASSWORD_CLIENT_HASH_ENABLED || 'false') === 'true',
+  passwordHashAlgorithm: process.env.PASSWORD_HASH_ALGORITHM || 'sha512',
+  passwordHashSecret: process.env.PASSWORD_HASH_SECRET || process.env.JWT_SECRET || 'troque_este_segredo',
   jwtSecret: process.env.JWT_SECRET || 'troque_este_segredo',
 };

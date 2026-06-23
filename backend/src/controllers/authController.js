@@ -1,7 +1,9 @@
 import bcrypt from 'bcryptjs';
+import { createHash } from 'crypto';
 import { z } from 'zod';
 
 import { pool } from '../config/db.js';
+import { env } from '../config/env.js';
 import { signToken } from '../middleware/auth.js';
 
 const registerSchema = z.object({
@@ -15,6 +17,27 @@ const loginSchema = z.object({
   password: z.string().min(3),
 });
 
+function resolveHashAlgorithm() {
+  return env.passwordHashAlgorithm === 'sha256' ? 'sha256' : 'sha512';
+}
+
+function normalizeIncomingPassword(password) {
+  if (!env.passwordClientHashEnabled) {
+    return password;
+  }
+
+  const algorithm = resolveHashAlgorithm();
+  const expectedLength = algorithm === 'sha256' ? 64 : 128;
+  const value = String(password || '').trim();
+
+  // Accept already-hashed values sent by the client to avoid double hashing.
+  if (new RegExp(`^[a-f0-9]{${expectedLength}}$`, 'i').test(value)) {
+    return value.toLowerCase();
+  }
+
+  return createHash(algorithm).update(`${value}:${env.passwordHashSecret}`).digest('hex');
+}
+
 export async function register(req, res) {
   const parsed = registerSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -22,6 +45,7 @@ export async function register(req, res) {
   }
 
   const { name, email, password } = parsed.data;
+  const normalizedPassword = normalizeIncomingPassword(password);
 
   try {
     const [existing] = await pool.query('select id from users where email = ? limit 1', [email]);
@@ -29,7 +53,7 @@ export async function register(req, res) {
       return res.status(409).json({ message: 'Email ja cadastrado.' });
     }
 
-    const passwordHash = await bcrypt.hash(password, 10);
+    const passwordHash = await bcrypt.hash(normalizedPassword, 10);
 
     const [userInsert] = await pool.query(
       'insert into users (name, email, password_hash) values (?, ?, ?)',
@@ -55,6 +79,7 @@ export async function login(req, res) {
   }
 
   const { email, password } = parsed.data;
+  const normalizedPassword = normalizeIncomingPassword(password);
 
   try {
     const [rows] = await pool.query(
@@ -82,9 +107,19 @@ export async function login(req, res) {
     }
 
     const isBcryptHash = typeof user.password_hash === 'string' && user.password_hash.startsWith('$2');
-    const validPassword = isBcryptHash
-      ? await bcrypt.compare(password, user.password_hash)
-      : process.env.NODE_ENV !== 'production' && password === user.password_hash;
+    let validPassword = false;
+
+    if (isBcryptHash) {
+      validPassword = await bcrypt.compare(normalizedPassword, user.password_hash);
+      if (!validPassword && env.passwordClientHashEnabled && normalizedPassword !== password) {
+        validPassword = await bcrypt.compare(password, user.password_hash);
+      }
+    } else {
+      validPassword =
+        process.env.NODE_ENV !== 'production' &&
+        (normalizedPassword === user.password_hash || password === user.password_hash);
+    }
+
     if (!validPassword) {
       return res.status(401).json({ message: 'Credenciais invalidas.' });
     }
