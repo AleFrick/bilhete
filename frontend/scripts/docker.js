@@ -2,6 +2,7 @@ import { spawnSync } from 'child_process';
 
 const imageName = 'bilhete-frontend:latest';
 const containerName = 'bilhete-frontend';
+const defaultApiUrl = 'http://68.168.222.85:3333/api';
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
@@ -18,12 +19,15 @@ function run(command, args, options = {}) {
 const action = process.argv[2];
 
 if (action === 'build') {
+  const apiUrl = process.argv[3] || process.env.VITE_API_URL || defaultApiUrl;
+  console.log(`[docker] Building with VITE_API_URL=${apiUrl}`);
+
   run('docker', [
     'build',
     '-t',
     imageName,
     '--build-arg',
-    'VITE_API_URL=http://localhost:3333/api',
+    `VITE_API_URL=${apiUrl}`,
     '.',
   ]);
   process.exit(0);
@@ -43,5 +47,5 @@ if (action === 'run') {
   process.exit(0);
 }
 
-console.error('Uso: node scripts/docker.js <build|run>');
+console.error('Uso: node scripts/docker.js <build|run> [VITE_API_URL]');
 process.exit(1);
