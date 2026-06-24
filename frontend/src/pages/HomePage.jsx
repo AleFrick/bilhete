@@ -7,6 +7,8 @@ export default function HomePage({
   radar,
   loadingVenues,
   loadingRadar,
+  locationEnabled,
+  locationBlockedMessage,
   premiumActive,
   currentCheckin,
   people,
@@ -39,8 +41,14 @@ export default function HomePage({
       <section className="panel">
         <h3>Hotspots</h3>
         {loadingVenues ? <p>Carregando locais...</p> : null}
+        {!loadingVenues && !locationEnabled ? (
+          <p className="explore-notice">
+            {locationBlockedMessage ||
+              'Sem localizacao ativa, o Bilhete perde a magia dos encontros por perto. Ative a permissao para liberar uma experiencia completa.'}
+          </p>
+        ) : null}
         {premiumActive && loadingRadar ? <p>Atualizando pessoas no local...</p> : null}
-        {premiumActive ? (
+        {premiumActive && locationEnabled ? (
           <label className="explore-filter">
             <input
               placeholder="Buscar local por nome ou endereco..."
@@ -49,8 +57,9 @@ export default function HomePage({
             />
           </label>
         ) : null}
-        <ul className="simple-list">
-          {filteredVenues.map((venue) => {
+        {locationEnabled ? (
+          <ul className="simple-list">
+            {filteredVenues.map((venue) => {
             const activePeopleValue = Number.parseInt(
               radarByVenueId.get(venue.id)?.activePeople ?? 0,
               10
@@ -63,6 +72,7 @@ export default function HomePage({
                 <div>
                   <strong>{venue.name}</strong>
                   <p>{venue.address || 'Endereco nao informado'}</p>
+                  {Number.isFinite(venue.distanceKm) ? <p>{venue.distanceKm} km de voce</p> : null}
                   {premiumActive ? (
                     <p className="hotspot-presence">
                       <span className="hotspot-presence__icon" aria-hidden="true">
@@ -90,9 +100,10 @@ export default function HomePage({
                 </button>
               </li>
             );
-          })}
-        </ul>
-        {premiumActive && !loadingVenues && !filteredVenues.length ? (
+            })}
+          </ul>
+        ) : null}
+        {locationEnabled && premiumActive && !loadingVenues && !filteredVenues.length ? (
           <p>Nenhum local encontrado para este filtro.</p>
         ) : null}
       </section>
@@ -106,6 +117,8 @@ export default function HomePage({
         onCheckout={onCheckout}
         onLoadPeople={onLoadPeople}
         onSendBilhete={onSendBilhete}
+        locationEnabled={locationEnabled}
+        locationBlockedMessage={locationBlockedMessage}
         hideVenueList
       />
     </div>

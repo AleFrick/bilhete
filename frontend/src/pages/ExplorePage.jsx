@@ -25,6 +25,8 @@ export default function ExplorePage({
   onLoadPeople,
   onSendBilhete,
   hideVenueList = false,
+  locationEnabled = true,
+  locationBlockedMessage = '',
 }) {
   const [activeScreen, setActiveScreen] = useState('venues');
   const [peopleFilter, setPeopleFilter] = useState('');
@@ -136,19 +138,27 @@ export default function ExplorePage({
       {!hideVenueList && !currentCheckin ? (
         <section className="panel">
           <h3>Locais para check-in</h3>
-          <ul className="simple-list">
-            {venues.map((venue) => (
-              <li key={venue.id}>
-                <div>
-                  <strong>{venue.name}</strong>
-                  <p>{venue.address || 'Endereco nao informado'}</p>
-                </div>
-                <button type="button" className="btn btn--primary" onClick={() => handleCheckin(venue.id)}>
-                  Check-in
-                </button>
-              </li>
-            ))}
-          </ul>
+          {!locationEnabled ? (
+            <p className="explore-notice">
+              {locationBlockedMessage ||
+                'Sem localizacao ativa, o Bilhete perde a magia dos encontros por perto. Ative a permissao para liberar uma experiencia completa.'}
+            </p>
+          ) : (
+            <ul className="simple-list">
+              {venues.map((venue) => (
+                <li key={venue.id}>
+                  <div>
+                    <strong>{venue.name}</strong>
+                    <p>{venue.address || 'Endereco nao informado'}</p>
+                    {Number.isFinite(venue.distanceKm) ? <p>{venue.distanceKm} km de voce</p> : null}
+                  </div>
+                  <button type="button" className="btn btn--primary" onClick={() => handleCheckin(venue.id)}>
+                    Check-in
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
       ) : null}
 

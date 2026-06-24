@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { api } from './api/client';
 import AppShell from './layout/AppShell';
@@ -6,8 +6,11 @@ import AuthPage from './pages/AuthPage';
 import BilhetesPage from './pages/BilhetesPage';
 import ChatsPage from './pages/ChatsPage';
 import HomePage from './pages/HomePage';
+import LandingPage from './pages/LandingPage';
 import ProfilePage from './pages/ProfilePage';
 import { clearSession, loadUser, persistSession } from './state/session';
+
+const DEFAULT_NEARBY_RADIUS_KM = 20;
 
 export default function App() {
   const [authLoading, setAuthLoading] = useState(false);
@@ -28,17 +31,76 @@ export default function App() {
   const [loadingVenues, setLoadingVenues] = useState(false);
   const [loadingRadar, setLoadingRadar] = useState(false);
   const [loadingPeople, setLoadingPeople] = useState(false);
+  const [locationEnabled, setLocationEnabled] = useState(true);
+  const [locationBlockedMessage, setLocationBlockedMessage] = useState('');
+  const [authMode, setAuthMode] = useState('login');
+  const [showAuthForm, setShowAuthForm] = useState(window.location.pathname !== '/');
+  const locationCacheRef = useRef({ resolved: false, value: null });
 
   const isAuthenticated = Boolean(me?.id);
+
+  const getBrowserLocation = () =>
+    new Promise((resolve) => {
+      if (typeof window === 'undefined' || !('geolocation' in navigator)) {
+        resolve({ coords: null, blocked: true });
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          resolve({
+            coords: {
+              lat: position.coords.latitude,
+              lng: position.coords.longitude,
+            },
+            blocked: false,
+          });
+        },
+        () => resolve({ coords: null, blocked: true }),
+        {
+          enableHighAccuracy: true,
+          timeout: 7000,
+          maximumAge: 120000,
+        }
+      );
+    });
+
+  const getCachedLocation = async () => {
+    if (locationCacheRef.current.resolved) {
+      return locationCacheRef.current.value;
+    }
+
+    const location = await getBrowserLocation();
+    locationCacheRef.current = {
+      resolved: true,
+      value: location,
+    };
+
+    return location;
+  };
 
   const loadBootstrapData = async () => {
     setGlobalError('');
 
     try {
       setLoadingVenues(true);
+      const locationResult = await getCachedLocation();
+      const location = locationResult?.coords || null;
+      const hasLocation = Boolean(location);
+
+      setLocationEnabled(hasLocation);
+      setLocationBlockedMessage(
+        hasLocation
+          ? ''
+          : 'Sem localizacao ativa, o Bilhete perde a magia dos encontros por perto. Ative a permissao para liberar uma experiencia completa.'
+      );
+
+      const venuesPromise = hasLocation
+        ? api.venues(location, DEFAULT_NEARBY_RADIUS_KM)
+        : Promise.resolve([]);
       const [meData, venuesData, checkinData, inboxData, outboxData, chatsData] = await Promise.all([
         api.me(),
-        api.venues(),
+        venuesPromise,
         api.currentCheckin(),
         api.bilhetesInbox(),
         api.bilhetesOutbox(),
@@ -89,6 +151,9 @@ export default function App() {
       const data = await api.login(payload);
       persistSession(data.token, data.user);
       setMe(data.user);
+      if (window.location.pathname === '/') {
+        window.history.replaceState({}, '', '/app');
+      }
     } catch (error) {
       setGlobalError(error.message);
     } finally {
@@ -104,6 +169,9 @@ export default function App() {
       const data = await api.register(payload);
       persistSession(data.token, data.user);
       setMe(data.user);
+      if (window.location.pathname === '/') {
+        window.history.replaceState({}, '', '/app');
+      }
     } catch (error) {
       setGlobalError(error.message);
     } finally {
@@ -232,6 +300,8 @@ export default function App() {
           radar={radar}
           loadingVenues={loadingVenues}
           loadingRadar={loadingRadar}
+          locationEnabled={locationEnabled}
+          locationBlockedMessage={locationBlockedMessage}
           premiumActive={Boolean(me?.premiumStatus)}
           currentCheckin={currentCheckin}
           people={people}
@@ -280,12 +350,33 @@ export default function App() {
   ]);
 
   if (!isAuthenticated) {
+    if (window.location.pathname === '/' && !showAuthForm) {
+      return (
+        <LandingPage
+          onCreateAccount={() => {
+            setAuthMode('register');
+            setShowAuthForm(true);
+          }}
+          onEnter={() => {
+            setAuthMode('login');
+            setShowAuthForm(true);
+          }}
+        />
+      );
+    }
+
     return (
       <AuthPage
         onLogin={handleLogin}
         onRegister={handleRegister}
         loading={authLoading}
         error={globalError}
+        initialMode={authMode}
+        onBack={() => {
+          if (window.location.pathname === '/') {
+            setShowAuthForm(false);
+          }
+        }}
       />
     );
   }

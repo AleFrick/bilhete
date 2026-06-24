@@ -3,12 +3,14 @@ create table if not exists users (
   name varchar(120) not null,
   email varchar(190) not null unique,
   password_hash varchar(255) not null,
+  role enum('user', 'admin') not null default 'user',
   created_at timestamp not null default current_timestamp
 );
 
 create table if not exists venues (
   id bigint primary key auto_increment,
   name varchar(160) not null,
+  city varchar(120),
   address varchar(220),
   lat decimal(10, 7),
   lng decimal(10, 7),

@@ -6,19 +6,79 @@ const venueParamSchema = z.object({
   venueId: z.coerce.number().int().positive(),
 });
 
+const venuesQuerySchema = z.object({
+  lat: z.preprocess(
+    (value) => (value === undefined || value === null || value === '' ? undefined : Number(value)),
+    z.number().min(-90).max(90).optional()
+  ),
+  lng: z.preprocess(
+    (value) => (value === undefined || value === null || value === '' ? undefined : Number(value)),
+    z.number().min(-180).max(180).optional()
+  ),
+  radiusKm: z.preprocess(
+    (value) => (value === undefined || value === null || value === '' ? 20 : Number(value)),
+    z.number().positive().max(200)
+  ),
+});
+
 export async function listVenues(req, res) {
+  const parsedQuery = venuesQuerySchema.safeParse(req.query);
+  if (!parsedQuery.success) {
+    return res.status(400).json({ message: 'Coordenadas invalidas.' });
+  }
+
+  const hasLocation = Number.isFinite(parsedQuery.data.lat) && Number.isFinite(parsedQuery.data.lng);
+
   try {
-    const [rows] = await pool.query(
-      `select
-        id,
-        name,
-        address,
-        partner_status as partnerStatus,
-        category,
-        created_at as createdAt
-      from venues
-      order by created_at desc`
-    );
+    let rows;
+
+    if (hasLocation) {
+      const [locationRows] = await pool.query(
+        `select
+          id,
+          name,
+          address,
+          partner_status as partnerStatus,
+          category,
+          created_at as createdAt,
+          round(
+            6371 * acos(
+              least(
+                1,
+                greatest(
+                  -1,
+                  cos(radians(?)) * cos(radians(lat)) * cos(radians(lng) - radians(?)) +
+                    sin(radians(?)) * sin(radians(lat))
+                )
+              )
+            ),
+            2
+          ) as distanceKm
+        from venues
+        where lat is not null and lng is not null
+        having distanceKm <= ?
+        order by
+          distanceKm asc,
+          created_at desc`,
+        [parsedQuery.data.lat, parsedQuery.data.lng, parsedQuery.data.lat, parsedQuery.data.radiusKm]
+      );
+
+      rows = locationRows;
+    } else {
+      const [defaultRows] = await pool.query(
+        `select
+          id,
+          name,
+          address,
+          partner_status as partnerStatus,
+          category,
+          created_at as createdAt
+        from venues
+        order by created_at desc`
+      );
+
+      rows = defaultRows;
+    }
 
     return res.json(rows);
   } catch (error) {

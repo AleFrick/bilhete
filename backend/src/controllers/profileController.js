@@ -16,6 +16,7 @@ export async function getMe(req, res) {
       `select
         u.id,
         u.email,
+        u.role,
         p.name,
         p.age,
         p.bio,

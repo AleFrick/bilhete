@@ -61,7 +61,20 @@ export const api = {
   me: () => request('/me'),
   updateMe: (payload) => request('/me', { method: 'PUT', body: JSON.stringify(payload) }),
 
-  venues: () => request('/venues'),
+  venues: (coords, radiusKm) => {
+    const params = new URLSearchParams();
+    if (Number.isFinite(coords?.lat) && Number.isFinite(coords?.lng)) {
+      params.set('lat', String(coords.lat));
+      params.set('lng', String(coords.lng));
+    }
+
+    if (Number.isFinite(radiusKm) && radiusKm > 0) {
+      params.set('radiusKm', String(radiusKm));
+    }
+
+    const query = params.toString();
+    return request(`/venues${query ? `?${query}` : ''}`);
+  },
   venuePeople: (venueId) => request(`/venues/${venueId}/people`),
   radar: () => request('/radar'),
 

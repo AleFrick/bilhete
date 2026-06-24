@@ -8,6 +8,10 @@ values
   (101, 'Ana Teste', 'ana.teste@bilhete.dev', '123'),
   (102, 'Bruno Teste', 'bruno.teste@bilhete.dev', '123');
 
+insert ignore into users (id, name, email, password_hash, role)
+values
+  (9001, 'Administrador Bilhete', 'admin@bilhete.dev', '123', 'admin');
+
 insert ignore into profiles (user_id, name, age, bio, photo_urls, status_social, premium_status, premium_expires_at, venue_id)
 values
   (101, 'Ana Teste', 26, 'Curte bar e conversa boa.', json_array('https://images.unsplash.com/photo-1494790108377-be9c29b29330'), 'conversar', 1, date_add(current_timestamp, interval 30 day), 1),

@@ -65,8 +65,8 @@ export async function register(req, res) {
       [userInsert.insertId, name, 'observando', 0]
     );
 
-    const token = signToken({ id: userInsert.insertId, email, premium_status: 0 });
-    return res.status(201).json({ token, user: { id: userInsert.insertId, name, email } });
+    const token = signToken({ id: userInsert.insertId, email, premium_status: 0, role: 'user' });
+    return res.status(201).json({ token, user: { id: userInsert.insertId, name, email, role: 'user' } });
   } catch (error) {
     return res.status(500).json({ message: 'Erro ao registrar usuario.' });
   }
@@ -87,6 +87,7 @@ export async function login(req, res) {
         u.id,
         u.name,
         u.email,
+        u.role,
         u.password_hash,
         case
           when p.premium_status = 1 and (p.premium_expires_at is null or p.premium_expires_at > current_timestamp)
@@ -131,6 +132,7 @@ export async function login(req, res) {
         id: user.id,
         name: user.name,
         email: user.email,
+        role: user.role,
         premiumStatus: Boolean(user.premiumStatus),
         premiumExpiresAt: user.premiumExpiresAt,
       },
