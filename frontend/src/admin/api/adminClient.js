@@ -58,6 +58,15 @@ async function request(path, options = {}) {
 export const adminApi = {
   login: (payload) => request('/admin/auth/login', { method: 'POST', body: JSON.stringify(payload) }),
   venueCities: () => request('/admin/venues/cities'),
+  venueLinkRequests: ({ status } = {}) => {
+    const params = new URLSearchParams();
+    if (status) {
+      params.set('status', status);
+    }
+
+    const query = params.toString();
+    return request(`/admin/venue-link-requests${query ? `?${query}` : ''}`);
+  },
   venues: ({ city, q, category } = {}) => {
     const params = new URLSearchParams();
     if (city) {
@@ -76,8 +85,44 @@ export const adminApi = {
   createVenue: (payload) => request('/admin/venues', { method: 'POST', body: JSON.stringify(payload) }),
   updateVenue: (venueId, payload) =>
     request(`/admin/venues/${venueId}`, { method: 'PUT', body: JSON.stringify(payload) }),
+  updateVenueLinkApproval: (venueId, status) =>
+    request(`/admin/venues/${venueId}/link-approval`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    }),
   geocodeAddress: (query) =>
     request(`/admin/geocode?q=${encodeURIComponent(query)}&nocache=${Date.now()}`, {
+      cache: 'no-store',
+      headers: {
+        'Cache-Control': 'no-cache',
+        Pragma: 'no-cache',
+      },
+    }),
+  establishmentProfile: () => request('/establishment/profile'),
+  updateEstablishmentProfile: (payload) =>
+    request('/establishment/profile', { method: 'PUT', body: JSON.stringify(payload) }),
+  establishmentVenueRequests: () => request('/establishment/venues/requests'),
+  searchVenuesForLink: ({ city, q } = {}) => {
+    const params = new URLSearchParams();
+    if (city) {
+      params.set('city', city);
+    }
+    if (q) {
+      params.set('q', q);
+    }
+
+    const query = params.toString();
+    return request(`/establishment/venues/search${query ? `?${query}` : ''}`);
+  },
+  requestNewVenue: (payload) =>
+    request('/establishment/venues/request-new', { method: 'POST', body: JSON.stringify(payload) }),
+  requestVenueLink: (venueId, payload = {}) =>
+    request('/establishment/venues/request-link', {
+      method: 'POST',
+      body: JSON.stringify({ venueId, ...payload }),
+    }),
+  establishmentGeocode: (query) =>
+    request(`/establishment/geocode?q=${encodeURIComponent(query)}&nocache=${Date.now()}`, {
       cache: 'no-store',
       headers: {
         'Cache-Control': 'no-cache',

@@ -44,46 +44,46 @@ export async function loginAdmin(req, res) {
     const [rows] = await pool.query(
       `select id, name, email, role, password_hash
        from users
-       where email = ? and role = 'admin'
+       where email = ? and role in ('admin', 'establishment')
        limit 1`,
       [email]
     );
 
-    const adminUser = rows[0];
-    if (!adminUser) {
+    const panelUser = rows[0];
+    if (!panelUser) {
       return res.status(401).json({ message: 'Credenciais invalidas.' });
     }
 
     const isBcryptHash =
-      typeof adminUser.password_hash === 'string' && adminUser.password_hash.startsWith('$2');
+      typeof panelUser.password_hash === 'string' && panelUser.password_hash.startsWith('$2');
     let validPassword = false;
 
     if (isBcryptHash) {
-      validPassword = await bcrypt.compare(normalizedPassword, adminUser.password_hash);
+      validPassword = await bcrypt.compare(normalizedPassword, panelUser.password_hash);
       if (!validPassword && env.passwordClientHashEnabled && normalizedPassword !== password) {
-        validPassword = await bcrypt.compare(password, adminUser.password_hash);
+        validPassword = await bcrypt.compare(password, panelUser.password_hash);
       }
     } else {
       validPassword =
         process.env.NODE_ENV !== 'production' &&
-        (normalizedPassword === adminUser.password_hash || password === adminUser.password_hash);
+        (normalizedPassword === panelUser.password_hash || password === panelUser.password_hash);
     }
 
     if (!validPassword) {
       return res.status(401).json({ message: 'Credenciais invalidas.' });
     }
 
-    const token = signToken(adminUser);
+    const token = signToken(panelUser);
     return res.json({
       token,
       user: {
-        id: adminUser.id,
-        name: adminUser.name,
-        email: adminUser.email,
-        role: adminUser.role,
+        id: panelUser.id,
+        name: panelUser.name,
+        email: panelUser.email,
+        role: panelUser.role,
       },
     });
   } catch (error) {
-    return res.status(500).json({ message: 'Erro ao autenticar administrador.' });
+    return res.status(500).json({ message: 'Erro ao autenticar acesso ao painel.' });
   }
 }

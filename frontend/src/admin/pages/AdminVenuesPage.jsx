@@ -92,6 +92,7 @@ export default function AdminVenuesPage({
   onSearchVenues,
   onCreateVenue,
   onUpdateVenue,
+  onUpdateVenueLinkApproval,
   loadingCreate,
   error,
 }) {
@@ -239,6 +240,17 @@ export default function AdminVenuesPage({
     }
   };
 
+  const handleLinkApproval = async (venueId, status) => {
+    try {
+      await onUpdateVenueLinkApproval(venueId, status);
+      setFeedback(
+        status === 'approved' ? 'Vinculo aprovado com sucesso.' : 'Solicitacao de vinculo rejeitada.'
+      );
+    } catch (requestError) {
+      // Error state handled by parent.
+    }
+  };
+
   return (
     <div className="admin-page-stack">
       {feedback ? (
@@ -326,9 +338,33 @@ export default function AdminVenuesPage({
                   <strong>{venue.name}</strong>
                   <p>{venue.city || 'Cidade nao informada'}</p>
                   <p>{venue.address || 'Endereco nao informado'}</p>
+                  {venue.establishmentName ? <p>Estabelecimento: {venue.establishmentName}</p> : null}
                 </div>
                 <div className="inline-row">
                   <span className="pill">{venue.category || 'sem categoria'}</span>
+                  {venue.establishmentLinkStatus === 'pending' ? (
+                    <>
+                      <button
+                        type="button"
+                        className="btn btn--primary"
+                        onClick={() => handleLinkApproval(venue.id, 'approved')}
+                        disabled={loadingCreate}
+                      >
+                        Aprovar vinculo
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn--ghost"
+                        onClick={() => handleLinkApproval(venue.id, 'rejected')}
+                        disabled={loadingCreate}
+                      >
+                        Rejeitar
+                      </button>
+                    </>
+                  ) : null}
+                  {venue.establishmentLinkStatus && venue.establishmentLinkStatus !== 'none' ? (
+                    <span className="pill">{venue.establishmentLinkStatus}</span>
+                  ) : null}
                   <button type="button" className="btn btn--ghost" onClick={() => openEditOverlay(venue)}>
                     Editar
                   </button>

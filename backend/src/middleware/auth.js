@@ -27,6 +27,14 @@ export function adminRequired(req, res, next) {
   return next();
 }
 
+export function establishmentRequired(req, res, next) {
+  if (!req.user || req.user.role !== 'establishment') {
+    return res.status(403).json({ message: 'Acesso restrito a estabelecimentos.' });
+  }
+
+  return next();
+}
+
 export function signToken(user) {
   const resolvedPremiumStatus =
     user.premium_status !== undefined

@@ -18,8 +18,8 @@ export default function AdminLoginPage({ loading, error, onLogin }) {
     <div className="admin-auth-page">
       <section className="admin-auth-card">
         <p className="hero__tag">Area Restrita</p>
-        <h1>Bilhete Admin</h1>
-        <p className="auth-subtitle">Entre com sua conta administrativa para gerenciar os locais da plataforma.</p>
+        <h1>Painel Bilhete</h1>
+        <p className="auth-subtitle">Entre com sua conta de administrador ou estabelecimento para acessar o painel.</p>
 
         <form className="auth-form" onSubmit={handleSubmit} autoComplete="off">
           <label>

@@ -3,8 +3,30 @@ create table if not exists users (
   name varchar(120) not null,
   email varchar(190) not null unique,
   password_hash varchar(255) not null,
-  role enum('user', 'admin') not null default 'user',
+  role enum('user', 'admin', 'establishment') not null default 'user',
   created_at timestamp not null default current_timestamp
+);
+
+create table if not exists establishments (
+  id bigint primary key auto_increment,
+  user_id bigint not null unique,
+  display_name varchar(160) not null,
+  city varchar(120),
+  address varchar(220),
+  lat decimal(10, 7),
+  lng decimal(10, 7),
+  location_confirmed tinyint(1) not null default 0,
+  category varchar(80),
+  description text,
+  logo_url varchar(255),
+  gallery_urls json,
+  contact_email varchar(190),
+  contact_phone varchar(40),
+  instagram_url varchar(255),
+  website_url varchar(255),
+  created_at timestamp not null default current_timestamp,
+  updated_at timestamp not null default current_timestamp on update current_timestamp,
+  constraint fk_establishments_user foreign key (user_id) references users(id) on delete cascade
 );
 
 create table if not exists venues (
@@ -16,7 +38,14 @@ create table if not exists venues (
   lng decimal(10, 7),
   partner_status tinyint(1) not null default 0,
   category varchar(80),
-  created_at timestamp not null default current_timestamp
+  establishment_id bigint null,
+  establishment_link_status enum('none', 'pending', 'approved', 'rejected') not null default 'none',
+  establishment_link_note text,
+  establishment_link_documents json,
+  establishment_link_requested_at timestamp null,
+  establishment_link_approved_at timestamp null,
+  created_at timestamp not null default current_timestamp,
+  constraint fk_venues_establishment foreign key (establishment_id) references establishments(id) on delete set null
 );
 
 create table if not exists profiles (
@@ -93,5 +122,6 @@ create table if not exists messages (
 
 create index idx_checkins_user_active on checkins(user_id, active);
 create index idx_checkins_venue_active on checkins(venue_id, active);
+create index idx_venues_establishment on venues(establishment_id, establishment_link_status);
 create index idx_bilhetes_to_user on bilhetes(to_user, created_at desc);
 create index idx_messages_chat on messages(chat_id, created_at);
