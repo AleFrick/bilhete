@@ -278,12 +278,11 @@ export default function AdminVenuesPage({
           </label>
 
           <button type="button" className="btn btn--primary" onClick={runSearch} disabled={loadingVenues || !filterCity}>
-            {loadingVenues ? 'Buscando...' : 'Buscar'}
+            Buscar
           </button>
         </div>
 
         <div>
-          <p className="auth-subtitle">Categoria para facilitar a busca</p>
           <div className="badge-group admin-category-badges" role="radiogroup" aria-label="Filtro de categoria">
             <button
               type="button"
@@ -312,9 +311,14 @@ export default function AdminVenuesPage({
         {error ? <p className="form-error">{error}</p> : null}
 
         {!hasSearched ? <p>Selecione uma cidade e clique em buscar para listar os locais.</p> : null}
+        {hasSearched && loadingVenues ? (
+          <div className="admin-grid-loader" role="status" aria-live="polite" aria-label="Carregando locais">
+            <span className="spinner" aria-hidden="true" />
+          </div>
+        ) : null}
         {hasSearched && !loadingVenues && !venues.length ? <p>Nenhum local encontrado para este filtro.</p> : null}
 
-        {hasSearched ? (
+        {hasSearched && !loadingVenues ? (
           <ul className="simple-list">
             {venues.map((venue) => (
               <li key={venue.id}>

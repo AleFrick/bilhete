@@ -43,6 +43,7 @@ export default function AdminApp() {
   const loadVenues = async (filters) => {
     setLoadingVenues(true);
     setVenuesError('');
+    setVenues([]);
 
     try {
       const data = await adminApi.venues(filters);
@@ -138,7 +139,6 @@ export default function AdminApp() {
       onLogout={handleLogout}
       adminName={adminUser?.name}
     >
-      {loadingVenues ? <p>Carregando locais...</p> : null}
       {activeTab === 'venues' ? (
         <AdminVenuesPage
           cities={cities}

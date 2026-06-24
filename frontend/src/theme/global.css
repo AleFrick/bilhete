@@ -1286,6 +1286,19 @@ select {
   height: 44px;
 }
 
+.admin-grid-loader {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 24px 0;
+}
+
+.admin-grid-loader .spinner {
+  width: 36px;
+  height: 36px;
+  border-width: 4px;
+}
+
 .admin-overlay {
   position: fixed;
   inset: 0;
