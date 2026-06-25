@@ -76,6 +76,7 @@ export const api = {
     return request(`/venues${query ? `?${query}` : ''}`);
   },
   venuePeople: (venueId) => request(`/venues/${venueId}/people`),
+  venueDetails: (venueId) => request(`/venues/${venueId}/details`),
   radar: () => request('/radar'),
 
   currentCheckin: () => request('/checkins/current'),

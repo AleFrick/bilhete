@@ -7,12 +7,36 @@ const BILHETE_PRESETS = [
   { id: 'mensagem_conversar', type: 'mensagem_livre', text: '🤝 Vamos conversar' },
 ];
 
+const VENUE_CATEGORY_LABELS = {
+  bar: 'Bar',
+  pub: 'Pub',
+  balada: 'Balada',
+  show: 'Show',
+  cafeteria: 'Cafeteria',
+  restaurante: 'Restaurante',
+  praca: 'Praca',
+  evento: 'Evento',
+};
+
 function getProfilePhoto(person) {
   if (Array.isArray(person?.photoUrls) && person.photoUrls.length) {
     return person.photoUrls[0];
   }
 
   return 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=300&q=80';
+}
+
+function formatVenueCategory(category) {
+  const normalized = String(category || '').trim().toLowerCase();
+  if (!normalized) {
+    return '';
+  }
+
+  if (VENUE_CATEGORY_LABELS[normalized]) {
+    return VENUE_CATEGORY_LABELS[normalized];
+  }
+
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
 }
 
 export default function ExplorePage({
@@ -147,8 +171,24 @@ export default function ExplorePage({
             <ul className="simple-list">
               {venues.map((venue) => (
                 <li key={venue.id}>
-                  <div>
-                    <strong>{venue.name}</strong>
+                  <div className="explore-venue-item">
+                    <div className="explore-venue-item__head">
+                      {venue.establishmentLogoUrl ? (
+                        <img
+                          src={venue.establishmentLogoUrl}
+                          alt={`Logo de ${venue.name}`}
+                          className="explore-venue-item__logo"
+                        />
+                      ) : (
+                        <span className="explore-venue-item__logo-fallback" aria-hidden="true">
+                          {String(venue.name || '?').trim().charAt(0).toUpperCase() || '?'}
+                        </span>
+                      )}
+                      <strong>{venue.name}</strong>
+                    </div>
+                    {formatVenueCategory(venue.category) ? (
+                      <span className="pill explore-venue-item__badge">{formatVenueCategory(venue.category)}</span>
+                    ) : null}
                     <p>{venue.address || 'Endereco nao informado'}</p>
                     {Number.isFinite(venue.distanceKm) ? <p>{venue.distanceKm} km de voce</p> : null}
                   </div>

@@ -35,31 +35,33 @@ export async function listVenues(req, res) {
     if (hasLocation) {
       const [locationRows] = await pool.query(
         `select
-          id,
-          name,
-          address,
-          partner_status as partnerStatus,
-          category,
-          created_at as createdAt,
+          v.id,
+          v.name,
+          v.address,
+          v.partner_status as partnerStatus,
+          v.category,
+          e.logo_url as establishmentLogoUrl,
+          v.created_at as createdAt,
           round(
             6371 * acos(
               least(
                 1,
                 greatest(
                   -1,
-                  cos(radians(?)) * cos(radians(lat)) * cos(radians(lng) - radians(?)) +
-                    sin(radians(?)) * sin(radians(lat))
+                  cos(radians(?)) * cos(radians(v.lat)) * cos(radians(v.lng) - radians(?)) +
+                    sin(radians(?)) * sin(radians(v.lat))
                 )
               )
             ),
             2
           ) as distanceKm
-        from venues
-        where lat is not null and lng is not null
+        from venues v
+        left join establishments e on e.id = v.establishment_id
+        where v.lat is not null and v.lng is not null
         having distanceKm <= ?
         order by
           distanceKm asc,
-          created_at desc`,
+          v.created_at desc`,
         [parsedQuery.data.lat, parsedQuery.data.lng, parsedQuery.data.lat, parsedQuery.data.radiusKm]
       );
 
@@ -67,14 +69,16 @@ export async function listVenues(req, res) {
     } else {
       const [defaultRows] = await pool.query(
         `select
-          id,
-          name,
-          address,
-          partner_status as partnerStatus,
-          category,
-          created_at as createdAt
-        from venues
-        order by created_at desc`
+          v.id,
+          v.name,
+          v.address,
+          v.partner_status as partnerStatus,
+          v.category,
+          e.logo_url as establishmentLogoUrl,
+          v.created_at as createdAt
+        from venues v
+        left join establishments e on e.id = v.establishment_id
+        order by v.created_at desc`
       );
 
       rows = defaultRows;
@@ -143,6 +147,76 @@ export async function listPeopleInVenue(req, res) {
     return res.json(normalizedRows);
   } catch (error) {
     return res.status(500).json({ message: 'Erro ao carregar pessoas do local.' });
+  }
+}
+
+export async function getVenueDetails(req, res) {
+  const parsed = venueParamSchema.safeParse(req.params);
+  if (!parsed.success) {
+    return res.status(400).json({ message: 'venueId invalido.' });
+  }
+
+  try {
+    // Get venue and establishment details
+    const [venueRows] = await pool.query(
+      `select
+        v.id,
+        v.name,
+        e.id as establishmentId,
+        e.gallery_urls as galleryUrls
+      from venues v
+      left join establishments e on e.id = v.establishment_id
+      where v.id = ?
+      limit 1`,
+      [parsed.data.venueId]
+    );
+
+    if (!venueRows.length) {
+      return res.status(404).json({ message: 'Venue nao encontrado.' });
+    }
+
+    const venue = venueRows[0];
+    let galleryUrls = [];
+
+    if (Array.isArray(venue.galleryUrls)) {
+      galleryUrls = venue.galleryUrls;
+    } else if (typeof venue.galleryUrls === 'string' && venue.galleryUrls.trim()) {
+      try {
+        const parsed = JSON.parse(venue.galleryUrls);
+        galleryUrls = Array.isArray(parsed) ? parsed : [];
+      } catch (error) {
+        galleryUrls = [];
+      }
+    }
+
+    // Get agenda events if establishment exists
+    let agendaEvents = [];
+    if (venue.establishmentId) {
+      const [eventRows] = await pool.query(
+        `select
+          id,
+          event_date as eventDate,
+          start_time as startTime,
+          title,
+          information,
+          party_flyer_url as partyFlyerUrl
+        from establishment_agenda_events
+        where establishment_id = ?
+        order by event_date asc, start_time asc`,
+        [venue.establishmentId]
+      );
+
+      agendaEvents = eventRows;
+    }
+
+    return res.json({
+      id: venue.id,
+      name: venue.name,
+      galleryUrls,
+      agendaEvents,
+    });
+  } catch (error) {
+    return res.status(500).json({ message: 'Erro ao carregar detalhes do venue.' });
   }
 }
 

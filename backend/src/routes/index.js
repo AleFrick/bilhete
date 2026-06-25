@@ -28,7 +28,7 @@ import { inbox, outbox, respond, sendBilhete } from '../controllers/bilheteContr
 import { getCurrentCheckin, checkin, checkout } from '../controllers/checkinController.js';
 import { getMessages, listChats, listMatches, sendMessage } from '../controllers/chatController.js';
 import { getMe, updateMe } from '../controllers/profileController.js';
-import { getRadar, listPeopleInVenue, listVenues } from '../controllers/venueController.js';
+import { getRadar, getVenueDetails, listPeopleInVenue, listVenues } from '../controllers/venueController.js';
 import { adminRequired, authRequired, establishmentRequired } from '../middleware/auth.js';
 
 const router = Router();
@@ -68,6 +68,7 @@ router.get('/me', authRequired, getMe);
 router.put('/me', authRequired, updateMe);
 
 router.get('/venues', authRequired, listVenues);
+router.get('/venues/:venueId/details', authRequired, getVenueDetails);
 router.get('/venues/:venueId/people', authRequired, listPeopleInVenue);
 router.get('/radar', authRequired, getRadar);
 

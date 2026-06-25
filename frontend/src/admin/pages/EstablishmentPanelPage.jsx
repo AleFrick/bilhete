@@ -107,7 +107,6 @@ export default function EstablishmentPanelPage() {
   const [venueSelection, setVenueSelection] = useState(INITIAL_VENUE_SELECTION);
   const [galleryIndex, setGalleryIndex] = useState(0);
   const [mediaTab, setMediaTab] = useState('logo');
-  const [gallerySourceMenuOpen, setGallerySourceMenuOpen] = useState(false);
   const [logoLoadError, setLogoLoadError] = useState(false);
   const [galleryLoadErrors, setGalleryLoadErrors] = useState({});
   const [previewState, setPreviewState] = useState({
@@ -422,26 +421,6 @@ export default function EstablishmentPanelPage() {
 
   const openGalleryFilePicker = () => {
     galleryFileInputRef.current?.click();
-    setGallerySourceMenuOpen(false);
-  };
-
-  const handlePickGalleryFromUrl = () => {
-    const value = window.prompt('Cole a URL da nova imagem do ambiente:');
-    if (!value) {
-      setGallerySourceMenuOpen(false);
-      return;
-    }
-
-    const normalized = value.trim();
-    if (!normalized) {
-      setGallerySourceMenuOpen(false);
-      return;
-    }
-
-    const nextUrls = [...galleryUrls, normalized];
-    setProfileForm((prev) => ({ ...prev, galleryText: nextUrls.join('\n') }));
-    setGalleryIndex(nextUrls.length - 1);
-    setGallerySourceMenuOpen(false);
   };
 
   const handleLogoFileChange = async (event) => {
@@ -998,10 +977,9 @@ export default function EstablishmentPanelPage() {
                       className={`admin-carousel__slide admin-carousel__slide--large ${index === galleryIndex ? 'is-active' : ''}`}
                       onClick={() => {
                         if (slide === '__ADD__') {
-                          setGallerySourceMenuOpen((prev) => !prev);
+                          openGalleryFilePicker();
                           return;
                         }
-                        setGallerySourceMenuOpen(false);
                         setGalleryIndex(index);
                         openGalleryPreview(index);
                       }}
@@ -1052,17 +1030,6 @@ export default function EstablishmentPanelPage() {
                     </button>
                   ))}
                 </div>
-
-                {gallerySourceMenuOpen ? (
-                  <div className="admin-source-menu">
-                    <button type="button" className="btn btn--ghost" onClick={openGalleryFilePicker}>
-                      Escolher arquivo
-                    </button>
-                    <button type="button" className="btn btn--ghost" onClick={handlePickGalleryFromUrl}>
-                      Colar URL
-                    </button>
-                  </div>
-                ) : null}
               </div>
             ) : null}
           </section>
