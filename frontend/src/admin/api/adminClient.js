@@ -121,6 +121,24 @@ export const adminApi = {
       method: 'POST',
       body: JSON.stringify({ venueId, ...payload }),
     }),
+  establishmentAgenda: ({ year, month } = {}) => {
+    const params = new URLSearchParams();
+    if (year) {
+      params.set('year', String(year));
+    }
+    if (month) {
+      params.set('month', String(month));
+    }
+
+    const query = params.toString();
+    return request(`/establishment/agenda${query ? `?${query}` : ''}`);
+  },
+  createEstablishmentAgendaEvent: (payload) =>
+    request('/establishment/agenda', { method: 'POST', body: JSON.stringify(payload) }),
+  updateEstablishmentAgendaEvent: (eventId, payload) =>
+    request(`/establishment/agenda/${eventId}`, { method: 'PUT', body: JSON.stringify(payload) }),
+  deleteEstablishmentAgendaEvent: (eventId) =>
+    request(`/establishment/agenda/${eventId}`, { method: 'DELETE' }),
   establishmentGeocode: (query) =>
     request(`/establishment/geocode?q=${encodeURIComponent(query)}&nocache=${Date.now()}`, {
       cache: 'no-store',

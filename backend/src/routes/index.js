@@ -11,11 +11,15 @@ import {
   updateAdminVenueLinkApproval,
 } from '../controllers/adminVenueController.js';
 import {
+  createEstablishmentAgendaEvent,
+  deleteEstablishmentAgendaEvent,
   getEstablishmentProfile,
+  listEstablishmentAgenda,
   listEstablishmentVenueRequests,
   requestNewVenue,
   requestVenueLink,
   searchVenuesForLink,
+  updateEstablishmentAgendaEvent,
   upsertEstablishmentProfile,
 } from '../controllers/establishmentController.js';
 import { login, loginApple, loginGoogle, register } from '../controllers/authController.js';
@@ -52,6 +56,10 @@ router.get('/establishment/venues/search', authRequired, establishmentRequired, 
 router.get('/establishment/venues/requests', authRequired, establishmentRequired, listEstablishmentVenueRequests);
 router.post('/establishment/venues/request-new', authRequired, establishmentRequired, requestNewVenue);
 router.post('/establishment/venues/request-link', authRequired, establishmentRequired, requestVenueLink);
+router.get('/establishment/agenda', authRequired, establishmentRequired, listEstablishmentAgenda);
+router.post('/establishment/agenda', authRequired, establishmentRequired, createEstablishmentAgendaEvent);
+router.put('/establishment/agenda/:eventId', authRequired, establishmentRequired, updateEstablishmentAgendaEvent);
+router.delete('/establishment/agenda/:eventId', authRequired, establishmentRequired, deleteEstablishmentAgendaEvent);
 router.get('/establishment/geocode', authRequired, establishmentRequired, geocodeAdminAddress);
 
 router.get('/me', authRequired, getMe);

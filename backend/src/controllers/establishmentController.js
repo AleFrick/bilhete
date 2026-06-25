@@ -41,6 +41,29 @@ const requestVenueLinkSchema = z.object({
   requestDocuments: z.array(z.string().trim().max(5000000)).max(10).optional(),
 });
 
+const establishmentAgendaQuerySchema = z.object({
+  year: z.coerce.number().int().min(2000).max(2200).optional(),
+  month: z.coerce.number().int().min(1).max(12).optional(),
+});
+
+const establishmentAgendaEventSchema = z.object({
+  eventDate: z
+    .string()
+    .trim()
+    .regex(/^\d{4}-\d{2}-\d{2}$/),
+  title: z.string().trim().min(2).max(180),
+  information: z.string().trim().max(2000).optional().or(z.literal('')),
+  startTime: z
+    .string()
+    .trim()
+    .regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+  partyFlyerUrl: z.string().trim().max(5000000).optional().or(z.literal('')),
+});
+
+const establishmentAgendaEventParamSchema = z.object({
+  eventId: z.coerce.number().int().positive(),
+});
+
 async function ensureEstablishmentRecord(userId) {
   const [existingRows] = await pool.query(
     `select id
@@ -113,6 +136,41 @@ async function loadEstablishmentProfile(userId) {
   }
 
   return profile;
+}
+
+async function hasApprovedVenueLink(establishmentId) {
+  const [rows] = await pool.query(
+    `select id
+     from venues
+     where establishment_id = ?
+       and establishment_link_status = 'approved'
+     limit 1`,
+    [establishmentId]
+  );
+
+  return Boolean(rows[0]);
+}
+
+async function loadEstablishmentAgendaEvent(establishmentId, eventId) {
+  const [rows] = await pool.query(
+    `select
+      id,
+      establishment_id as establishmentId,
+      event_date as eventDate,
+      start_time as startTime,
+      title,
+      information,
+      party_flyer_url as partyFlyerUrl,
+      created_at as createdAt,
+      updated_at as updatedAt
+    from establishment_agenda_events
+    where id = ?
+      and establishment_id = ?
+    limit 1`,
+    [eventId, establishmentId]
+  );
+
+  return rows[0] || null;
 }
 
 export async function getEstablishmentProfile(req, res) {
@@ -385,5 +443,191 @@ export async function requestVenueLink(req, res) {
     return res.json(rows[0] || null);
   } catch (error) {
     return res.status(500).json({ message: 'Erro ao solicitar vinculacao de local.' });
+  }
+}
+
+export async function listEstablishmentAgenda(req, res) {
+  const parsed = establishmentAgendaQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    return res.status(400).json({ message: 'Filtro de agenda invalido.' });
+  }
+
+  try {
+    const establishmentId = await ensureEstablishmentRecord(req.user.id);
+    const approved = await hasApprovedVenueLink(establishmentId);
+    if (!approved) {
+      return res.status(403).json({ message: 'Agenda disponivel apenas para estabelecimento com vinculacao aprovada.' });
+    }
+
+    const now = new Date();
+    const year = parsed.data.year || now.getFullYear();
+    const month = parsed.data.month || now.getMonth() + 1;
+
+    const rangeStart = `${year}-${String(month).padStart(2, '0')}-01`;
+    const nextMonthDate = new Date(year, month, 1);
+    const rangeEnd = `${nextMonthDate.getFullYear()}-${String(nextMonthDate.getMonth() + 1).padStart(2, '0')}-01`;
+
+    const [rows] = await pool.query(
+      `select
+        id,
+        establishment_id as establishmentId,
+        event_date as eventDate,
+        start_time as startTime,
+        title,
+        information,
+        party_flyer_url as partyFlyerUrl,
+        created_at as createdAt,
+        updated_at as updatedAt
+      from establishment_agenda_events
+      where establishment_id = ?
+        and event_date >= ?
+        and event_date < ?
+      order by event_date asc, start_time asc, title asc`,
+      [establishmentId, rangeStart, rangeEnd]
+    );
+
+    return res.json(rows);
+  } catch (error) {
+    return res.status(500).json({ message: 'Erro ao carregar agenda do estabelecimento.' });
+  }
+}
+
+export async function createEstablishmentAgendaEvent(req, res) {
+  const parsed = establishmentAgendaEventSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ message: 'Dados invalidos para evento da agenda.' });
+  }
+
+  try {
+    const establishmentId = await ensureEstablishmentRecord(req.user.id);
+    const approved = await hasApprovedVenueLink(establishmentId);
+    if (!approved) {
+      return res.status(403).json({ message: 'Agenda disponivel apenas para estabelecimento com vinculacao aprovada.' });
+    }
+
+    const payload = parsed.data;
+
+    const [insertResult] = await pool.query(
+      `insert into establishment_agenda_events (
+        establishment_id,
+        event_date,
+        start_time,
+        title,
+        information,
+        party_flyer_url
+      ) values (?, ?, ?, ?, ?, ?)`,
+      [
+        establishmentId,
+        payload.eventDate,
+        `${payload.startTime}:00`,
+        payload.title,
+        payload.information || null,
+        payload.partyFlyerUrl || null,
+      ]
+    );
+
+    const [rows] = await pool.query(
+      `select
+        id,
+        establishment_id as establishmentId,
+        event_date as eventDate,
+        start_time as startTime,
+        title,
+        information,
+        party_flyer_url as partyFlyerUrl,
+        created_at as createdAt,
+        updated_at as updatedAt
+      from establishment_agenda_events
+      where id = ?
+      limit 1`,
+      [insertResult.insertId]
+    );
+
+    return res.status(201).json(rows[0] || null);
+  } catch (error) {
+    return res.status(500).json({ message: 'Erro ao salvar evento na agenda.' });
+  }
+}
+
+export async function updateEstablishmentAgendaEvent(req, res) {
+  const parsedParams = establishmentAgendaEventParamSchema.safeParse(req.params);
+  if (!parsedParams.success) {
+    return res.status(400).json({ message: 'Evento de agenda inválido.' });
+  }
+
+  const parsedBody = establishmentAgendaEventSchema.safeParse(req.body);
+  if (!parsedBody.success) {
+    return res.status(400).json({ message: 'Dados inválidos para evento da agenda.' });
+  }
+
+  try {
+    const establishmentId = await ensureEstablishmentRecord(req.user.id);
+    const approved = await hasApprovedVenueLink(establishmentId);
+    if (!approved) {
+      return res.status(403).json({ message: 'Agenda disponível apenas para estabelecimento com vinculação aprovada.' });
+    }
+
+    const existing = await loadEstablishmentAgendaEvent(establishmentId, parsedParams.data.eventId);
+    if (!existing) {
+      return res.status(404).json({ message: 'Evento não encontrado na agenda.' });
+    }
+
+    const payload = parsedBody.data;
+
+    await pool.query(
+      `update establishment_agenda_events
+       set event_date = ?,
+           start_time = ?,
+           title = ?,
+           information = ?,
+           party_flyer_url = ?
+       where id = ?
+         and establishment_id = ?`,
+      [
+        payload.eventDate,
+        `${payload.startTime}:00`,
+        payload.title,
+        payload.information || null,
+        payload.partyFlyerUrl || null,
+        parsedParams.data.eventId,
+        establishmentId,
+      ]
+    );
+
+    const updated = await loadEstablishmentAgendaEvent(establishmentId, parsedParams.data.eventId);
+    return res.json(updated);
+  } catch (error) {
+    return res.status(500).json({ message: 'Erro ao atualizar evento da agenda.' });
+  }
+}
+
+export async function deleteEstablishmentAgendaEvent(req, res) {
+  const parsedParams = establishmentAgendaEventParamSchema.safeParse(req.params);
+  if (!parsedParams.success) {
+    return res.status(400).json({ message: 'Evento de agenda inválido.' });
+  }
+
+  try {
+    const establishmentId = await ensureEstablishmentRecord(req.user.id);
+    const approved = await hasApprovedVenueLink(establishmentId);
+    if (!approved) {
+      return res.status(403).json({ message: 'Agenda disponível apenas para estabelecimento com vinculação aprovada.' });
+    }
+
+    const existing = await loadEstablishmentAgendaEvent(establishmentId, parsedParams.data.eventId);
+    if (!existing) {
+      return res.status(404).json({ message: 'Evento não encontrado na agenda.' });
+    }
+
+    await pool.query(
+      `delete from establishment_agenda_events
+       where id = ?
+         and establishment_id = ?`,
+      [parsedParams.data.eventId, establishmentId]
+    );
+
+    return res.status(204).send();
+  } catch (error) {
+    return res.status(500).json({ message: 'Erro ao excluir evento da agenda.' });
   }
 }

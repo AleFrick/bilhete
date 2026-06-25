@@ -4,6 +4,7 @@ import { adminApi } from './api/adminClient';
 import AdminShell from './layout/AdminShell';
 import AdminLoginPage from './pages/AdminLoginPage';
 import EstablishmentPanelPage from './pages/EstablishmentPanelPage';
+import EstablishmentAgendaPage from './pages/EstablishmentAgendaPage';
 import AdminLinkRequestsPage from './pages/AdminLinkRequestsPage';
 import AdminVenuesPage from './pages/AdminVenuesPage';
 import { clearAdminSession, loadAdminUser, persistAdminSession } from './state/adminSession';
@@ -25,6 +26,7 @@ export default function AdminApp() {
   const [loadingLinkRequests, setLoadingLinkRequests] = useState(false);
   const [linkRequestsStatus, setLinkRequestsStatus] = useState('pending');
   const [linkRequestsError, setLinkRequestsError] = useState('');
+  const [establishmentHasApprovedLink, setEstablishmentHasApprovedLink] = useState(false);
 
   const isAuthenticated = Boolean(adminUser?.id);
   const isAdminUser = adminUser?.role === 'admin';
@@ -37,9 +39,49 @@ export default function AdminApp() {
     }
 
     if (isEstablishmentUser) {
-      setActiveTab((prev) => (prev === 'establishment-profile' ? prev : 'establishment-profile'));
+      setActiveTab((prev) => {
+        if (prev === 'establishment-profile') {
+          return prev;
+        }
+        if (prev === 'establishment-agenda' && establishmentHasApprovedLink) {
+          return prev;
+        }
+        return 'establishment-profile';
+      });
     }
-  }, [isAdminUser, isEstablishmentUser]);
+  }, [isAdminUser, isEstablishmentUser, establishmentHasApprovedLink]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !isEstablishmentUser) {
+      setEstablishmentHasApprovedLink(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadEstablishmentMenuPermissions = async () => {
+      try {
+        const requests = await adminApi.establishmentVenueRequests();
+        const hasApproved = Array.isArray(requests)
+          ? requests.some((item) => item.establishmentLinkStatus === 'approved')
+          : false;
+
+        if (!cancelled) {
+          setEstablishmentHasApprovedLink(hasApproved);
+        }
+      } catch {
+        if (!cancelled) {
+          setEstablishmentHasApprovedLink(false);
+        }
+      }
+    };
+
+    loadEstablishmentMenuPermissions();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, isEstablishmentUser]);
 
   const loadCities = async () => {
     setLoadingCities(true);
@@ -230,7 +272,10 @@ export default function AdminApp() {
               { key: 'venues', label: 'Cadastro de locais' },
               { key: 'link-requests', label: 'Pedidos de vinculacao' },
             ]
-          : [{ key: 'establishment-profile', label: 'Cadastro' }]
+          : [
+              { key: 'establishment-profile', label: 'Cadastro' },
+              ...(establishmentHasApprovedLink ? [{ key: 'establishment-agenda', label: 'Agenda' }] : []),
+            ]
       }
     >
       {isAdminUser && activeTab === 'venues' ? (
@@ -262,6 +307,10 @@ export default function AdminApp() {
       ) : null}
 
       {isEstablishmentUser && activeTab === 'establishment-profile' ? <EstablishmentPanelPage /> : null}
+
+      {isEstablishmentUser && activeTab === 'establishment-agenda' ? (
+        <EstablishmentAgendaPage hasApprovedLink={establishmentHasApprovedLink} />
+      ) : null}
     </AdminShell>
   );
 }

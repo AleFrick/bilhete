@@ -48,6 +48,20 @@ create table if not exists venues (
   constraint fk_venues_establishment foreign key (establishment_id) references establishments(id) on delete set null
 );
 
+create table if not exists establishment_agenda_events (
+  id bigint primary key auto_increment,
+  establishment_id bigint not null,
+  event_date date not null,
+  start_time time not null,
+  title varchar(180) not null,
+  information text,
+  party_flyer_url text,
+  created_at timestamp not null default current_timestamp,
+  updated_at timestamp not null default current_timestamp on update current_timestamp,
+  constraint fk_establishment_agenda_events_establishment
+    foreign key (establishment_id) references establishments(id) on delete cascade
+);
+
 create table if not exists profiles (
   user_id bigint primary key,
   name varchar(120) not null,
@@ -123,5 +137,6 @@ create table if not exists messages (
 create index idx_checkins_user_active on checkins(user_id, active);
 create index idx_checkins_venue_active on checkins(venue_id, active);
 create index idx_venues_establishment on venues(establishment_id, establishment_link_status);
+create index idx_establishment_agenda_events_date on establishment_agenda_events(establishment_id, event_date, start_time);
 create index idx_bilhetes_to_user on bilhetes(to_user, created_at desc);
 create index idx_messages_chat on messages(chat_id, created_at);
