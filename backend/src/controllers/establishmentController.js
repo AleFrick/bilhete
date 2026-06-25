@@ -58,11 +58,64 @@ const establishmentAgendaEventSchema = z.object({
     .trim()
     .regex(/^([01]\d|2[0-3]):[0-5]\d$/),
   partyFlyerUrl: z.string().trim().max(5000000).optional().or(z.literal('')),
+  analyticsMetadata: z.record(z.string().trim().max(80), z.string().trim().max(160)).optional(),
 });
 
 const establishmentAgendaEventParamSchema = z.object({
   eventId: z.coerce.number().int().positive(),
 });
+
+const establishmentAgendaStatsQuerySchema = z.object({
+  startDate: z
+    .string()
+    .trim()
+    .regex(/^\d{4}-\d{2}-\d{2}$/),
+  endDate: z
+    .string()
+    .trim()
+    .regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+
+function normalizeAnalyticsMetadata(value) {
+  if (!value) {
+    return {};
+  }
+
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return parsed;
+      }
+      return {};
+    } catch {
+      return {};
+    }
+  }
+
+  if (typeof value === 'object' && !Array.isArray(value)) {
+    return value;
+  }
+
+  return {};
+}
+
+function sanitizeAnalyticsMetadata(value) {
+  const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  const entries = Object.entries(source)
+    .map(([key, entryValue]) => [String(key || '').trim(), String(entryValue || '').trim()])
+    .filter(([key, entryValue]) => key && entryValue)
+    .slice(0, 40);
+
+  return Object.fromEntries(entries);
+}
+
+function normalizeAgendaEventRow(row) {
+  return {
+    ...row,
+    analyticsMetadata: normalizeAnalyticsMetadata(row.analyticsMetadata),
+  };
+}
 
 async function ensureEstablishmentRecord(userId) {
   const [existingRows] = await pool.query(
@@ -161,6 +214,7 @@ async function loadEstablishmentAgendaEvent(establishmentId, eventId) {
       title,
       information,
       party_flyer_url as partyFlyerUrl,
+      analytics_metadata as analyticsMetadata,
       created_at as createdAt,
       updated_at as updatedAt
     from establishment_agenda_events
@@ -170,7 +224,11 @@ async function loadEstablishmentAgendaEvent(establishmentId, eventId) {
     [eventId, establishmentId]
   );
 
-  return rows[0] || null;
+  if (!rows[0]) {
+    return null;
+  }
+
+  return normalizeAgendaEventRow(rows[0]);
 }
 
 export async function getEstablishmentProfile(req, res) {
@@ -476,6 +534,7 @@ export async function listEstablishmentAgenda(req, res) {
         title,
         information,
         party_flyer_url as partyFlyerUrl,
+        analytics_metadata as analyticsMetadata,
         created_at as createdAt,
         updated_at as updatedAt
       from establishment_agenda_events
@@ -486,7 +545,7 @@ export async function listEstablishmentAgenda(req, res) {
       [establishmentId, rangeStart, rangeEnd]
     );
 
-    return res.json(rows);
+    return res.json(rows.map((row) => normalizeAgendaEventRow(row)));
   } catch (error) {
     return res.status(500).json({ message: 'Erro ao carregar agenda do estabelecimento.' });
   }
@@ -506,6 +565,7 @@ export async function createEstablishmentAgendaEvent(req, res) {
     }
 
     const payload = parsed.data;
+    const analyticsMetadata = sanitizeAnalyticsMetadata(payload.analyticsMetadata);
 
     const [insertResult] = await pool.query(
       `insert into establishment_agenda_events (
@@ -514,8 +574,9 @@ export async function createEstablishmentAgendaEvent(req, res) {
         start_time,
         title,
         information,
-        party_flyer_url
-      ) values (?, ?, ?, ?, ?, ?)`,
+        party_flyer_url,
+        analytics_metadata
+      ) values (?, ?, ?, ?, ?, ?, ?)`,
       [
         establishmentId,
         payload.eventDate,
@@ -523,6 +584,7 @@ export async function createEstablishmentAgendaEvent(req, res) {
         payload.title,
         payload.information || null,
         payload.partyFlyerUrl || null,
+        JSON.stringify(analyticsMetadata),
       ]
     );
 
@@ -535,6 +597,7 @@ export async function createEstablishmentAgendaEvent(req, res) {
         title,
         information,
         party_flyer_url as partyFlyerUrl,
+        analytics_metadata as analyticsMetadata,
         created_at as createdAt,
         updated_at as updatedAt
       from establishment_agenda_events
@@ -543,7 +606,7 @@ export async function createEstablishmentAgendaEvent(req, res) {
       [insertResult.insertId]
     );
 
-    return res.status(201).json(rows[0] || null);
+    return res.status(201).json(rows[0] ? normalizeAgendaEventRow(rows[0]) : null);
   } catch (error) {
     return res.status(500).json({ message: 'Erro ao salvar evento na agenda.' });
   }
@@ -573,6 +636,7 @@ export async function updateEstablishmentAgendaEvent(req, res) {
     }
 
     const payload = parsedBody.data;
+    const analyticsMetadata = sanitizeAnalyticsMetadata(payload.analyticsMetadata);
 
     await pool.query(
       `update establishment_agenda_events
@@ -580,7 +644,8 @@ export async function updateEstablishmentAgendaEvent(req, res) {
            start_time = ?,
            title = ?,
            information = ?,
-           party_flyer_url = ?
+           party_flyer_url = ?,
+           analytics_metadata = ?
        where id = ?
          and establishment_id = ?`,
       [
@@ -589,6 +654,7 @@ export async function updateEstablishmentAgendaEvent(req, res) {
         payload.title,
         payload.information || null,
         payload.partyFlyerUrl || null,
+        JSON.stringify(analyticsMetadata),
         parsedParams.data.eventId,
         establishmentId,
       ]
@@ -629,5 +695,111 @@ export async function deleteEstablishmentAgendaEvent(req, res) {
     return res.status(204).send();
   } catch (error) {
     return res.status(500).json({ message: 'Erro ao excluir evento da agenda.' });
+  }
+}
+
+export async function getEstablishmentAgendaStats(req, res) {
+  const parsed = establishmentAgendaStatsQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    return res.status(400).json({ message: 'Período inválido para estatísticas.' });
+  }
+
+  const { startDate, endDate } = parsed.data;
+  if (startDate > endDate) {
+    return res.status(400).json({ message: 'Data inicial deve ser menor ou igual à data final.' });
+  }
+
+  try {
+    const establishmentId = await ensureEstablishmentRecord(req.user.id);
+    const approved = await hasApprovedVenueLink(establishmentId);
+    if (!approved) {
+      return res.status(403).json({ message: 'Estatísticas disponíveis apenas para estabelecimento com vinculação aprovada.' });
+    }
+
+    const [eventsRows] = await pool.query(
+      `select
+        id,
+        event_date as eventDate,
+        analytics_metadata as analyticsMetadata
+      from establishment_agenda_events
+      where establishment_id = ?
+        and event_date >= ?
+        and event_date <= ?`,
+      [establishmentId, startDate, endDate]
+    );
+
+    const endExclusive = `${endDate} 23:59:59`;
+    const [checkinsRows] = await pool.query(
+      `select
+        date(c.checked_in_at) as checkinDate,
+        count(*) as total
+      from checkins c
+      join venues v on v.id = c.venue_id
+      where v.establishment_id = ?
+        and c.checked_in_at >= ?
+        and c.checked_in_at <= ?
+      group by date(c.checked_in_at)`,
+      [establishmentId, `${startDate} 00:00:00`, endExclusive]
+    );
+
+    const checkinsByDate = new Map(
+      checkinsRows.map((row) => [String(row.checkinDate).slice(0, 10), Number(row.total || 0)])
+    );
+
+    const totals = {
+      events: eventsRows.length,
+      checkins: 0,
+    };
+
+    for (const value of checkinsByDate.values()) {
+      totals.checkins += value;
+    }
+
+    const metricAccumulator = new Map();
+
+    for (const row of eventsRows) {
+      const eventDate = String(row.eventDate || '').slice(0, 10);
+      const eventCheckins = checkinsByDate.get(eventDate) || 0;
+      const metadata = sanitizeAnalyticsMetadata(normalizeAnalyticsMetadata(row.analyticsMetadata));
+
+      for (const [key, value] of Object.entries(metadata)) {
+        const groupKey = `${key}::${value}`;
+        if (!metricAccumulator.has(groupKey)) {
+          metricAccumulator.set(groupKey, {
+            key,
+            value,
+            eventCount: 0,
+            checkins: 0,
+          });
+        }
+
+        const item = metricAccumulator.get(groupKey);
+        item.eventCount += 1;
+        item.checkins += eventCheckins;
+      }
+    }
+
+    const metrics = Array.from(metricAccumulator.values()).sort((a, b) => {
+      if (b.checkins !== a.checkins) {
+        return b.checkins - a.checkins;
+      }
+
+      if (b.eventCount !== a.eventCount) {
+        return b.eventCount - a.eventCount;
+      }
+
+      return `${a.key}:${a.value}`.localeCompare(`${b.key}:${b.value}`);
+    });
+
+    return res.json({
+      period: {
+        startDate,
+        endDate,
+      },
+      totals,
+      metrics,
+    });
+  } catch (error) {
+    return res.status(500).json({ message: 'Erro ao carregar estatísticas da agenda.' });
   }
 }

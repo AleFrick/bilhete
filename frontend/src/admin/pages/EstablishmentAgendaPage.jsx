@@ -33,6 +33,51 @@ function formatEventTime(value) {
   return normalized;
 }
 
+function parseMetadataPairs(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return [];
+  }
+
+  const pairs = Object.entries(value)
+    .map(([key, entryValue]) => ({
+      key: String(key || ''),
+      value: String(entryValue || ''),
+    }))
+    .filter((entry) => entry.key || entry.value);
+
+  if (!pairs.length) {
+    return [];
+  }
+
+  return pairs;
+}
+
+function countFilledMetadata(pairs) {
+  if (!Array.isArray(pairs)) {
+    return 0;
+  }
+
+  return pairs.filter((entry) => String(entry.key || '').trim() && String(entry.value || '').trim()).length;
+}
+
+function buildMetadataPayload(pairs) {
+  if (!Array.isArray(pairs)) {
+    return {};
+  }
+
+  return pairs
+    .map((entry) => ({
+      key: String(entry.key || '').trim(),
+      value: String(entry.value || '').trim(),
+    }))
+    .filter((entry) => entry.key && entry.value)
+    .slice(0, 40)
+    .reduce((accumulator, entry) => {
+      accumulator[entry.key] = entry.value;
+      return accumulator;
+    }, {});
+}
+
 function buildCalendarCells(year, month) {
   const firstDayWeek = new Date(year, month - 1, 1).getDay();
   const daysInMonth = new Date(year, month, 0).getDate();
@@ -69,12 +114,20 @@ export default function EstablishmentAgendaPage({ hasApprovedLink }) {
   const [saving, setSaving] = useState(false);
   const [flyerLoadError, setFlyerLoadError] = useState(false);
   const [flyerPreviewOpen, setFlyerPreviewOpen] = useState(false);
+  const [metadataModalOpen, setMetadataModalOpen] = useState(false);
+  const [metadataDraftRows, setMetadataDraftRows] = useState([]);
+  const [metadataInputKey, setMetadataInputKey] = useState('');
+  const [metadataInputValue, setMetadataInputValue] = useState('');
+  const [metadataEditingIndex, setMetadataEditingIndex] = useState(null);
   const [form, setForm] = useState({
     partyFlyerUrl: '',
     title: '',
     information: '',
     startTime: '',
+    metadataPairs: [],
   });
+
+  const metadataCount = useMemo(() => countFilledMetadata(form.metadataPairs), [form.metadataPairs]);
 
   const readImageAsDataUrl = (file) =>
     new Promise((resolve, reject) => {
@@ -150,6 +203,7 @@ export default function EstablishmentAgendaPage({ hasApprovedLink }) {
       title: '',
       information: '',
       startTime: '',
+      metadataPairs: [],
     });
     setFlyerLoadError(false);
     setFlyerPreviewOpen(false);
@@ -162,6 +216,7 @@ export default function EstablishmentAgendaPage({ hasApprovedLink }) {
     setEditingEventId(null);
     setSelectedDate('');
     setFlyerPreviewOpen(false);
+    setMetadataModalOpen(false);
   };
 
   const openModalForEvent = (agendaEvent) => {
@@ -172,6 +227,7 @@ export default function EstablishmentAgendaPage({ hasApprovedLink }) {
       title: agendaEvent.title || '',
       information: agendaEvent.information || '',
       startTime: String(agendaEvent.startTime || '').slice(0, 5),
+      metadataPairs: parseMetadataPairs(agendaEvent.analyticsMetadata),
     });
     setFlyerLoadError(false);
     setFlyerPreviewOpen(false);
@@ -211,6 +267,75 @@ export default function EstablishmentAgendaPage({ hasApprovedLink }) {
     setFlyerPreviewOpen(false);
   };
 
+  const openMetadataModal = () => {
+    setMetadataDraftRows(parseMetadataPairs(buildMetadataPayload(form.metadataPairs)));
+    setMetadataInputKey('');
+    setMetadataInputValue('');
+    setMetadataEditingIndex(null);
+    setMetadataModalOpen(true);
+  };
+
+  const closeMetadataModal = () => {
+    setMetadataModalOpen(false);
+    setMetadataInputKey('');
+    setMetadataInputValue('');
+    setMetadataEditingIndex(null);
+  };
+
+  const handleSelectMetadataRow = (index) => {
+    const row = metadataDraftRows[index];
+    if (!row) {
+      return;
+    }
+
+    setMetadataEditingIndex(index);
+    setMetadataInputKey(row.key);
+    setMetadataInputValue(row.value);
+  };
+
+  const handleApplyMetadataInput = () => {
+    const key = metadataInputKey.trim();
+    const value = metadataInputValue.trim();
+
+    if (!key || !value) {
+      setError('Preencha campo e valor para salvar dado estatístico.');
+      return;
+    }
+
+    setError('');
+    setMetadataDraftRows((prev) => {
+      if (metadataEditingIndex !== null && prev[metadataEditingIndex]) {
+        return prev.map((row, index) => (index === metadataEditingIndex ? { key, value } : row));
+      }
+
+      return [...prev, { key, value }].slice(0, 40);
+    });
+
+    setMetadataEditingIndex(null);
+    setMetadataInputKey('');
+    setMetadataInputValue('');
+  };
+
+  const handleRemoveMetadataDraft = (index, domEvent) => {
+    if (domEvent) {
+      domEvent.preventDefault();
+      domEvent.stopPropagation();
+    }
+
+    setMetadataDraftRows((prev) => prev.filter((_, itemIndex) => itemIndex !== index));
+
+    if (metadataEditingIndex === index) {
+      setMetadataEditingIndex(null);
+      setMetadataInputKey('');
+      setMetadataInputValue('');
+    }
+  };
+
+  const handleSaveMetadataModal = () => {
+    setForm((prev) => ({ ...prev, metadataPairs: metadataDraftRows }));
+    closeMetadataModal();
+  };
+
   const handleSaveEvent = async (event) => {
     event.preventDefault();
     setError('');
@@ -239,6 +364,7 @@ export default function EstablishmentAgendaPage({ hasApprovedLink }) {
         information: form.information,
         startTime: form.startTime,
         partyFlyerUrl: form.partyFlyerUrl,
+        analyticsMetadata: buildMetadataPayload(form.metadataPairs),
       };
 
       if (editingEventId) {
@@ -522,6 +648,20 @@ export default function EstablishmentAgendaPage({ hasApprovedLink }) {
                 />
               </label>
 
+              <div className="agenda-event-form__metadata">
+                <div className="inline-row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+                  <p className="auth-subtitle" style={{ marginBottom: '0' }}>
+                    Dados para estatísticas
+                  </p>
+                  <div className="inline-row" style={{ gap: '8px' }}>
+                    <span className="pill">{metadataCount}</span>
+                    <button type="button" className="btn btn--ghost" onClick={openMetadataModal}>
+                      Visualizar
+                    </button>
+                  </div>
+                </div>
+              </div>
+
               <div className="inline-row" style={{ justifyContent: 'flex-end', marginTop: '8px' }}>
                 <button type="button" className="btn btn--ghost" onClick={closeModal}>
                   Cancelar
@@ -531,6 +671,86 @@ export default function EstablishmentAgendaPage({ hasApprovedLink }) {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      ) : null}
+
+      {metadataModalOpen ? (
+        <div className="admin-overlay" role="dialog" aria-modal="true" aria-label="Editar dados estatísticos">
+          <div className="panel admin-overlay__content" style={{ maxWidth: '760px' }}>
+            <div className="admin-overlay__header">
+              <div className="inline-row" style={{ alignItems: 'center' }}>
+                <button
+                  type="button"
+                  className="btn btn--ghost agenda-metadata__back"
+                  onClick={closeMetadataModal}
+                  aria-label="Voltar"
+                  title="Voltar"
+                >
+                  ←
+                </button>
+                <h2>Dados estatísticos</h2>
+              </div>
+            </div>
+
+            <div className="agenda-metadata__inputs">
+              <input
+                value={metadataInputKey}
+                onChange={(event) => setMetadataInputKey(event.target.value)}
+                placeholder="Campo (ex: tipo_festa, promoção, tema)"
+              />
+              <input
+                value={metadataInputValue}
+                onChange={(event) => setMetadataInputValue(event.target.value)}
+                placeholder="Valor (ex: eletrônica, rodada dupla, sertanejo)"
+              />
+              <button type="button" className="btn btn--primary" onClick={handleApplyMetadataInput}>
+                {metadataEditingIndex !== null ? 'Salvar' : 'Adicionar'}
+              </button>
+            </div>
+
+            <div className="agenda-metadata__grid">
+              {!metadataDraftRows.length ? <p>Nenhum dado estatístico cadastrado.</p> : null}
+
+              {metadataDraftRows.map((entry, index) => (
+                <button
+                  key={`metadata-grid-${index}`}
+                  type="button"
+                  className={`agenda-metadata__row ${metadataEditingIndex === index ? 'is-active' : ''}`}
+                  onClick={() => handleSelectMetadataRow(index)}
+                >
+                  <span>{entry.key}</span>
+                  <span>{entry.value}</span>
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    className="agenda-metadata__remove"
+                    onClick={(event) => handleRemoveMetadataDraft(index, event)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        handleRemoveMetadataDraft(index, event);
+                      }
+                    }}
+                    title="Remover"
+                    aria-label={`Remover dado ${entry.key}`}
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M9 3h6l1 2h4v2H4V5h4l1-2zm1 6h2v9h-2V9zm4 0h2v9h-2V9zM7 9h2v9H7V9z" />
+                    </svg>
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <div className="inline-row" style={{ justifyContent: 'flex-end', marginTop: '10px' }}>
+              <button type="button" className="btn btn--ghost" onClick={closeMetadataModal}>
+                Cancelar
+              </button>
+              <button type="button" className="btn btn--primary" onClick={handleSaveMetadataModal}>
+                Salvar dados
+              </button>
+            </div>
           </div>
         </div>
       ) : null}

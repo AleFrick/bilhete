@@ -5,6 +5,7 @@ import AdminShell from './layout/AdminShell';
 import AdminLoginPage from './pages/AdminLoginPage';
 import EstablishmentPanelPage from './pages/EstablishmentPanelPage';
 import EstablishmentAgendaPage from './pages/EstablishmentAgendaPage';
+import EstablishmentAgendaStatsPage from './pages/EstablishmentAgendaStatsPage';
 import AdminLinkRequestsPage from './pages/AdminLinkRequestsPage';
 import AdminVenuesPage from './pages/AdminVenuesPage';
 import { clearAdminSession, loadAdminUser, persistAdminSession } from './state/adminSession';
@@ -44,6 +45,9 @@ export default function AdminApp() {
           return prev;
         }
         if (prev === 'establishment-agenda' && establishmentHasApprovedLink) {
+          return prev;
+        }
+        if (prev === 'establishment-stats' && establishmentHasApprovedLink) {
           return prev;
         }
         return 'establishment-profile';
@@ -275,6 +279,7 @@ export default function AdminApp() {
           : [
               { key: 'establishment-profile', label: 'Cadastro' },
               ...(establishmentHasApprovedLink ? [{ key: 'establishment-agenda', label: 'Agenda' }] : []),
+              ...(establishmentHasApprovedLink ? [{ key: 'establishment-stats', label: 'Estatísticas' }] : []),
             ]
       }
     >
@@ -310,6 +315,10 @@ export default function AdminApp() {
 
       {isEstablishmentUser && activeTab === 'establishment-agenda' ? (
         <EstablishmentAgendaPage hasApprovedLink={establishmentHasApprovedLink} />
+      ) : null}
+
+      {isEstablishmentUser && activeTab === 'establishment-stats' ? (
+        <EstablishmentAgendaStatsPage hasApprovedLink={establishmentHasApprovedLink} />
       ) : null}
     </AdminShell>
   );

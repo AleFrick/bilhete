@@ -13,6 +13,7 @@ import {
 import {
   createEstablishmentAgendaEvent,
   deleteEstablishmentAgendaEvent,
+  getEstablishmentAgendaStats,
   getEstablishmentProfile,
   listEstablishmentAgenda,
   listEstablishmentVenueRequests,
@@ -60,6 +61,7 @@ router.get('/establishment/agenda', authRequired, establishmentRequired, listEst
 router.post('/establishment/agenda', authRequired, establishmentRequired, createEstablishmentAgendaEvent);
 router.put('/establishment/agenda/:eventId', authRequired, establishmentRequired, updateEstablishmentAgendaEvent);
 router.delete('/establishment/agenda/:eventId', authRequired, establishmentRequired, deleteEstablishmentAgendaEvent);
+router.get('/establishment/agenda/stats', authRequired, establishmentRequired, getEstablishmentAgendaStats);
 router.get('/establishment/geocode', authRequired, establishmentRequired, geocodeAdminAddress);
 
 router.get('/me', authRequired, getMe);

@@ -56,6 +56,7 @@ create table if not exists establishment_agenda_events (
   title varchar(180) not null,
   information text,
   party_flyer_url text,
+  analytics_metadata json,
   created_at timestamp not null default current_timestamp,
   updated_at timestamp not null default current_timestamp on update current_timestamp,
   constraint fk_establishment_agenda_events_establishment

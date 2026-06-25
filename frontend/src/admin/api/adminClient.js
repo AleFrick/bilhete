@@ -139,6 +139,13 @@ export const adminApi = {
     request(`/establishment/agenda/${eventId}`, { method: 'PUT', body: JSON.stringify(payload) }),
   deleteEstablishmentAgendaEvent: (eventId) =>
     request(`/establishment/agenda/${eventId}`, { method: 'DELETE' }),
+  establishmentAgendaStats: ({ startDate, endDate }) => {
+    const params = new URLSearchParams();
+    params.set('startDate', startDate);
+    params.set('endDate', endDate);
+
+    return request(`/establishment/agenda/stats?${params.toString()}`);
+  },
   establishmentGeocode: (query) =>
     request(`/establishment/geocode?q=${encodeURIComponent(query)}&nocache=${Date.now()}`, {
       cache: 'no-store',
