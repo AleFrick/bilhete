@@ -429,7 +429,9 @@ export default function AdminVenuesPage({
                     {loadingGeocode ? (
                       <span className="spinner admin-address-search__spinner" aria-hidden="true" />
                     ) : (
-                      <span aria-hidden="true">🔎</span>
+                      <svg className="admin-search-icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M10 4a6 6 0 104.24 10.24l4.76 4.76 1.41-1.41-4.76-4.76A6 6 0 0010 4zm0 2a4 4 0 110 8 4 4 0 010-8z" />
+                      </svg>
                     )}
                   </button>
                 </div>

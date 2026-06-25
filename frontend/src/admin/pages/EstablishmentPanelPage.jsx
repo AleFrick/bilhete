@@ -132,6 +132,7 @@ export default function EstablishmentPanelPage() {
   const [loadingGeocode, setLoadingGeocode] = useState(false);
   const [requestingVenueLink, setRequestingVenueLink] = useState(false);
   const [requestingNewVenue, setRequestingNewVenue] = useState(false);
+  const [venueAvailabilityFilter, setVenueAvailabilityFilter] = useState('available');
 
   const [feedback, setFeedback] = useState('');
   const [error, setError] = useState('');
@@ -173,6 +174,26 @@ export default function EstablishmentPanelPage() {
         .filter(Boolean),
     [profileForm.galleryText]
   );
+
+  const filteredVenueSearchResults = useMemo(() => {
+    if (!Array.isArray(venueSelection.searchResults)) {
+      return [];
+    }
+
+    if (venueAvailabilityFilter === 'all') {
+      return venueSelection.searchResults;
+    }
+
+    if (venueAvailabilityFilter === 'unavailable') {
+      return venueSelection.searchResults.filter(
+        (venue) => venue.establishmentLinkStatus === 'approved' || venue.establishmentLinkStatus === 'pending'
+      );
+    }
+
+    return venueSelection.searchResults.filter(
+      (venue) => venue.establishmentLinkStatus !== 'approved' && venue.establishmentLinkStatus !== 'pending'
+    );
+  }, [venueSelection.searchResults, venueAvailabilityFilter]);
 
   const carouselSlides = [...galleryUrls, '__ADD__'];
 
@@ -565,7 +586,13 @@ export default function EstablishmentPanelPage() {
       ...prev,
       selectedVenue: venue,
     }));
-    setFeedback('Local selecionado para solicitação.');
+  };
+
+  const backToVenueSearch = () => {
+    setVenueSelection((prev) => ({
+      ...prev,
+      selectedVenue: null,
+    }));
   };
 
   const resetVenueSelection = () => {
@@ -574,6 +601,7 @@ export default function EstablishmentPanelPage() {
 
   const openVenueRequestModal = () => {
     setError('');
+    setVenueAvailabilityFilter('available');
     setVenueSelection((prev) => ({
       ...INITIAL_VENUE_SELECTION,
       searchCity: profileForm.city || prev.searchCity,
@@ -784,7 +812,9 @@ export default function EstablishmentPanelPage() {
                       {loadingGeocode ? (
                         <span className="spinner admin-address-search__spinner" aria-hidden="true" />
                       ) : (
-                        <span aria-hidden="true">🔎</span>
+                        <svg className="admin-search-icon" viewBox="0 0 24 24" aria-hidden="true">
+                          <path d="M10 4a6 6 0 104.24 10.24l4.76 4.76 1.41-1.41-4.76-4.76A6 6 0 0010 4zm0 2a4 4 0 110 8 4 4 0 010-8z" />
+                        </svg>
                       )}
                     </button>
                   ) : null}
@@ -1040,7 +1070,7 @@ export default function EstablishmentPanelPage() {
           {error ? <p className="form-error">{error}</p> : null}
 
           <button type="submit" className="btn btn--primary" disabled={savingProfile || loadingProfile}>
-            {savingProfile ? 'Salvando...' : 'Salvar perfil'}
+            {savingProfile ? 'Salvando...' : 'Salvar'}
           </button>
         </form>
       </section>
@@ -1101,149 +1131,211 @@ export default function EstablishmentPanelPage() {
               </button>
             </div>
 
-            <p className="auth-subtitle">Busque um local existente. Se não encontrar, solicite o cadastro de um novo com os dados atuais.</p>
-
-            <div className="admin-search-grid">
-              <label>
-                Cidade
-                <input
-                  value={venueSelection.searchCity}
-                  onChange={(event) =>
-                    setVenueSelection((prev) => ({ ...prev, searchCity: event.target.value }))
-                  }
-                />
-              </label>
-
-              <label>
-                Busca
-                <input
-                  value={venueSelection.searchText}
-                  onChange={(event) =>
-                    setVenueSelection((prev) => ({ ...prev, searchText: event.target.value }))
-                  }
-                  placeholder="Nome, endereço ou categoria"
-                />
-              </label>
-
-              <button type="button" className="btn btn--primary" onClick={handleSearchExistingVenues} disabled={searchingVenues}>
-                {searchingVenues ? 'Buscando...' : 'Localizar local'}
-              </button>
-            </div>
-
-            {!searchingVenues && venueSelection.searchResults.length ? (
-              <ul className="simple-list" style={{ marginTop: '12px' }}>
-                {venueSelection.searchResults.map((venue) => (
-                  <li key={venue.id}>
-                    <div>
-                      <strong>{venue.name}</strong>
-                      <p>{venue.city || 'Cidade não informada'}</p>
-                      <p>{venue.address || 'Endereço não informado'}</p>
-                    </div>
-                    <button
-                      type="button"
-                      className="btn btn--ghost"
-                      onClick={() => handleSelectExistingVenue(venue)}
-                    >
-                      Selecionar
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-
             {!venueSelection.selectedVenue ? (
-              <div className="inline-row" style={{ marginTop: '12px', justifyContent: 'space-between' }}>
-                <p className="auth-subtitle">Não encontrou o local?</p>
-                <button type="button" className="btn btn--ghost" onClick={startNewVenueRequestFromProfile}>
-                  Solicitar cadastro de local
-                </button>
-              </div>
-            ) : null}
+              <>
+                <div className="admin-search-grid" style={{ gridTemplateColumns: '1fr 1.4fr', alignItems: 'end' }}>
+                  <label>
+                    Cidade
+                    <input
+                      value={venueSelection.searchCity}
+                      onChange={(event) =>
+                        setVenueSelection((prev) => ({ ...prev, searchCity: event.target.value }))
+                      }
+                    />
+                  </label>
 
-            {venueSelection.selectedVenue ? (
-              <form className="admin-form" onSubmit={handleSubmitVenueLink} style={{ marginTop: '12px' }}>
-                <div className="inline-row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-                  <strong>
-                    {venueSelection.selectedVenue.id ? 'Local selecionado para vinculação' : 'Solicitação de novo local'}
-                  </strong>
-                  <button type="button" className="btn btn--ghost" onClick={resetVenueSelection}>
-                    Limpar
+                  <label>
+                    Busca
+                    <div className="admin-address-search">
+                      <input
+                        value={venueSelection.searchText}
+                        onChange={(event) =>
+                          setVenueSelection((prev) => ({ ...prev, searchText: event.target.value }))
+                        }
+                        placeholder="Nome, endereço ou categoria"
+                      />
+                      <button
+                        type="button"
+                        className="admin-address-search__btn"
+                        onClick={handleSearchExistingVenues}
+                        disabled={searchingVenues}
+                        title="Localizar local"
+                        aria-label="Localizar local"
+                      >
+                        {searchingVenues ? (
+                          <span className="spinner admin-address-search__spinner" aria-hidden="true" />
+                        ) : (
+                          <svg className="admin-search-icon" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M10 4a6 6 0 104.24 10.24l4.76 4.76 1.41-1.41-4.76-4.76A6 6 0 0010 4zm0 2a4 4 0 110 8 4 4 0 010-8z" />
+                          </svg>
+                        )}
+                      </button>
+                    </div>
+                  </label>
+                </div>
+
+                <div className="inline-row" style={{ marginTop: '8px' }}>
+                  <button
+                    type="button"
+                    className={`btn btn--ghost ${venueAvailabilityFilter === 'available' ? 'is-active' : ''}`}
+                    onClick={() => setVenueAvailabilityFilter('available')}
+                  >
+                    Disponíveis
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn btn--ghost ${venueAvailabilityFilter === 'unavailable' ? 'is-active' : ''}`}
+                    onClick={() => setVenueAvailabilityFilter('unavailable')}
+                  >
+                    Indisponíveis
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn btn--ghost ${venueAvailabilityFilter === 'all' ? 'is-active' : ''}`}
+                    onClick={() => setVenueAvailabilityFilter('all')}
+                  >
+                    Todos
                   </button>
                 </div>
 
-                <p>{venueSelection.selectedVenue.name || profileForm.displayName}</p>
-                <p className="auth-subtitle">
-                  {venueSelection.selectedVenue.address || profileForm.address || 'Endereço não informado'}
-                </p>
+                {!searchingVenues && filteredVenueSearchResults.length ? (
+                  <ul className="simple-list" style={{ marginTop: '12px' }}>
+                    {filteredVenueSearchResults.map((venue) => {
+                      const isApproved = venue.establishmentLinkStatus === 'approved';
+                      const isPending = venue.establishmentLinkStatus === 'pending';
 
-                <label>
-                  Texto de identificação da solicitação
-                  <textarea
-                    rows={4}
-                    value={venueSelection.requestNote}
-                    onChange={(event) =>
-                      setVenueSelection((prev) => ({ ...prev, requestNote: event.target.value }))
-                    }
-                    placeholder="Descreva como identificar o estabelecimento e o motivo da solicitação"
-                    required
-                  />
-                </label>
-
-                <div>
-                  <p className="auth-subtitle">Documentos complementares</p>
-                  <input
-                    ref={requestDocsFileInputRef}
-                    type="file"
-                    multiple
-                    onChange={handleVenueRequestDocumentsChange}
-                    style={{ display: 'none' }}
-                  />
-                  <button
-                    type="button"
-                    className="btn btn--ghost"
-                    onClick={() => requestDocsFileInputRef.current?.click()}
-                  >
-                    Anexar documentos
-                  </button>
-
-                  {venueSelection.requestDocuments.length ? (
-                    <ul className="simple-list" style={{ marginTop: '10px' }}>
-                      {venueSelection.requestDocuments.map((_, index) => (
-                        <li key={`doc-${index}`}>
+                      return (
+                        <li key={venue.id}>
                           <div>
-                            <strong>Documento {index + 1}</strong>
+                            <strong>{venue.name}</strong>
+                            <p>{venue.city || 'Cidade não informada'}</p>
+                            <p>{venue.address || 'Endereço não informado'}</p>
+                            <span className={`pill ${isApproved ? 'pill--success' : isPending ? 'pill--warning' : ''}`}>
+                              {isApproved ? 'Já vinculado' : isPending ? 'Vinculação pendente' : 'Disponível para vínculo'}
+                            </span>
                           </div>
                           <button
                             type="button"
                             className="btn btn--ghost"
-                            onClick={() => handleRemoveVenueRequestDocument(index)}
+                            onClick={() => handleSelectExistingVenue(venue)}
+                            disabled={isApproved || isPending}
                           >
-                            Remover
+                            {isApproved ? 'Vinculado' : isPending ? 'Pendente' : 'Selecionar'}
                           </button>
                         </li>
-                      ))}
-                    </ul>
-                  ) : null}
-                </div>
+                      );
+                    })}
+                  </ul>
+                ) : null}
 
-                <div className="inline-row" style={{ justifyContent: 'flex-end', marginTop: '8px' }}>
-                  <button type="button" className="btn btn--ghost" onClick={closeVenueRequestModal}>
-                    Cancelar
-                  </button>
-                  <button
-                    type="submit"
-                    className="btn btn--primary"
-                    disabled={requestingVenueLink || requestingNewVenue}
-                  >
-                    {requestingVenueLink || requestingNewVenue
-                      ? 'Enviando...'
-                      : venueSelection.selectedVenue.id
-                        ? 'Solicitar vínculo'
-                        : 'Solicitar cadastro de local'}
+                <div className="inline-row" style={{ marginTop: '12px', justifyContent: 'space-between' }}>
+                  <p className="auth-subtitle">Não encontrou o local?</p>
+                  <button type="button" className="btn btn--ghost" onClick={startNewVenueRequestFromProfile}>
+                    Solicitar cadastro de local
                   </button>
                 </div>
-              </form>
+              </>
             ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      {venueRequestModalOpen && venueSelection.selectedVenue ? (
+        <div className="admin-overlay" role="dialog" aria-modal="true" aria-label="Dados da solicitação de vinculação">
+          <div className="panel admin-overlay__content admin-image-modal">
+            <div className="admin-overlay__header">
+              <h2>{venueSelection.selectedVenue.id ? 'Local selecionado para vinculação' : 'Solicitação de novo local'}</h2>
+              <div className="inline-row">
+                <button type="button" className="btn btn--ghost" onClick={backToVenueSearch}>
+                  Voltar
+                </button>
+                <button
+                  type="button"
+                  className="btn btn--ghost admin-image-modal__close"
+                  onClick={closeVenueRequestModal}
+                  aria-label="Fechar solicitação"
+                  title="Fechar"
+                >
+                  X
+                </button>
+              </div>
+            </div>
+
+            <form className="admin-form" onSubmit={handleSubmitVenueLink}>
+              <div className="panel" style={{ padding: '12px 14px' }}>
+                <strong>{venueSelection.selectedVenue.name || profileForm.displayName}</strong>
+                <p className="auth-subtitle" style={{ marginTop: '6px', marginBottom: 0 }}>
+                  {venueSelection.selectedVenue.address || profileForm.address || 'Endereço não informado'}
+                </p>
+              </div>
+
+              <label>
+                Texto de identificação da solicitação
+                <textarea
+                  rows={4}
+                  value={venueSelection.requestNote}
+                  onChange={(event) =>
+                    setVenueSelection((prev) => ({ ...prev, requestNote: event.target.value }))
+                  }
+                  placeholder="Descreva como identificar o estabelecimento e o motivo da solicitação"
+                  required
+                />
+              </label>
+
+              <div>
+                <p className="auth-subtitle">Documentos complementares</p>
+                <input
+                  ref={requestDocsFileInputRef}
+                  type="file"
+                  multiple
+                  onChange={handleVenueRequestDocumentsChange}
+                  style={{ display: 'none' }}
+                />
+                <button
+                  type="button"
+                  className="btn btn--ghost"
+                  onClick={() => requestDocsFileInputRef.current?.click()}
+                >
+                  Anexar documentos
+                </button>
+
+                {venueSelection.requestDocuments.length ? (
+                  <ul className="simple-list" style={{ marginTop: '10px' }}>
+                    {venueSelection.requestDocuments.map((_, index) => (
+                      <li key={`doc-${index}`}>
+                        <div>
+                          <strong>Documento {index + 1}</strong>
+                        </div>
+                        <button
+                          type="button"
+                          className="btn btn--ghost"
+                          onClick={() => handleRemoveVenueRequestDocument(index)}
+                        >
+                          Remover
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
+
+              <div className="inline-row" style={{ justifyContent: 'flex-end', marginTop: '8px' }}>
+                <button type="button" className="btn btn--ghost" onClick={closeVenueRequestModal}>
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn--primary"
+                  disabled={requestingVenueLink || requestingNewVenue}
+                >
+                  {requestingVenueLink || requestingNewVenue
+                    ? 'Enviando...'
+                    : venueSelection.selectedVenue.id
+                      ? 'Solicitar vínculo'
+                      : 'Solicitar cadastro de local'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       ) : null}

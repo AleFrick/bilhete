@@ -18,7 +18,7 @@ create table if not exists establishments (
   location_confirmed tinyint(1) not null default 0,
   category varchar(80),
   description text,
-  logo_url varchar(255),
+  logo_url text,
   gallery_urls json,
   contact_email varchar(190),
   contact_phone varchar(40),

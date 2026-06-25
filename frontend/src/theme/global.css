@@ -1986,11 +1986,23 @@ textarea {
   justify-content: center;
   cursor: pointer;
   color: var(--muted);
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(255, 255, 255, 0.06);
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.admin-address-search__btn:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.12);
 }
 
 .admin-address-search__btn:disabled {
   cursor: wait;
+}
+
+.admin-search-icon {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
 }
 
 .admin-address-search__spinner {
