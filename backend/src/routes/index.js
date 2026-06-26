@@ -36,6 +36,16 @@ import {
   startFacebookOAuth,
   startGoogleOAuth,
 } from '../controllers/authController.js';
+import {
+  createAdminSupportTicketMessage,
+  createEstablishmentSupportTicket,
+  createEstablishmentSupportTicketMessage,
+  listAdminSupportTicketMessages,
+  listAdminSupportTickets,
+  listEstablishmentSupportTicketMessages,
+  listEstablishmentSupportTickets,
+  updateAdminSupportTicket,
+} from '../controllers/supportTicketController.js';
 import { inbox, outbox, respond, sendBilhete } from '../controllers/bilheteController.js';
 import { getCurrentCheckin, checkin, checkout } from '../controllers/checkinController.js';
 import { getMessages, listChats, listMatches, sendMessage } from '../controllers/chatController.js';
@@ -69,6 +79,10 @@ router.post('/admin/venues', authRequired, adminRequired, createAdminVenue);
 router.put('/admin/venues/:venueId', authRequired, adminRequired, updateAdminVenue);
 router.patch('/admin/venues/:venueId/link-approval', authRequired, adminRequired, updateAdminVenueLinkApproval);
 router.get('/admin/geocode', authRequired, adminRequired, geocodeAdminAddress);
+router.get('/admin/support-tickets', authRequired, adminRequired, listAdminSupportTickets);
+router.patch('/admin/support-tickets/:ticketId', authRequired, adminRequired, updateAdminSupportTicket);
+router.get('/admin/support-tickets/:ticketId/messages', authRequired, adminRequired, listAdminSupportTicketMessages);
+router.post('/admin/support-tickets/:ticketId/messages', authRequired, adminRequired, createAdminSupportTicketMessage);
 
 router.get('/establishment/profile', authRequired, establishmentRequired, getEstablishmentProfile);
 router.put('/establishment/profile', authRequired, establishmentRequired, upsertEstablishmentProfile);
@@ -82,6 +96,10 @@ router.put('/establishment/agenda/:eventId', authRequired, establishmentRequired
 router.delete('/establishment/agenda/:eventId', authRequired, establishmentRequired, deleteEstablishmentAgendaEvent);
 router.get('/establishment/agenda/stats', authRequired, establishmentRequired, getEstablishmentAgendaStats);
 router.get('/establishment/geocode', authRequired, establishmentRequired, geocodeAdminAddress);
+router.get('/establishment/support-tickets', authRequired, establishmentRequired, listEstablishmentSupportTickets);
+router.post('/establishment/support-tickets', authRequired, establishmentRequired, createEstablishmentSupportTicket);
+router.get('/establishment/support-tickets/:ticketId/messages', authRequired, establishmentRequired, listEstablishmentSupportTicketMessages);
+router.post('/establishment/support-tickets/:ticketId/messages', authRequired, establishmentRequired, createEstablishmentSupportTicketMessage);
 
 router.get('/me', authRequired, getMe);
 router.put('/me', authRequired, updateMe);

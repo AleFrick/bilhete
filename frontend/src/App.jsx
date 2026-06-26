@@ -12,6 +12,25 @@ import { clearSession, loadUser, persistSession } from './state/session';
 
 const DEFAULT_NEARBY_RADIUS_KM = 20;
 
+function resolveRouteForRole(user) {
+  if (user?.role === 'admin') {
+    return '/admin';
+  }
+
+  if (user?.role === 'establishment') {
+    return '/admin/establishment';
+  }
+
+  return '/app';
+}
+
+function redirectToRoleRoute(user) {
+  const targetRoute = resolveRouteForRole(user);
+  if (window.location.pathname !== targetRoute) {
+    window.location.replace(targetRoute);
+  }
+}
+
 export default function App() {
   const [authLoading, setAuthLoading] = useState(false);
   const [globalError, setGlobalError] = useState('');
@@ -74,6 +93,14 @@ export default function App() {
   }, []);
 
   const isAuthenticated = Boolean(me?.id);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      return;
+    }
+
+    redirectToRoleRoute(me);
+  }, [isAuthenticated, me]);
 
   const getBrowserLocation = () =>
     new Promise((resolve) => {
@@ -187,9 +214,7 @@ export default function App() {
       const data = await api.login(payload);
       persistSession(data.token, data.user);
       setMe(data.user);
-      if (window.location.pathname === '/') {
-        window.history.replaceState({}, '', '/app');
-      }
+      redirectToRoleRoute(data.user);
     } catch (error) {
       setGlobalError(error.message);
     } finally {
@@ -205,9 +230,7 @@ export default function App() {
       const data = await api.register(payload);
       persistSession(data.token, data.user);
       setMe(data.user);
-      if (window.location.pathname === '/') {
-        window.history.replaceState({}, '', '/app');
-      }
+      redirectToRoleRoute(data.user);
     } catch (error) {
       setGlobalError(error.message);
     } finally {
@@ -415,11 +438,6 @@ export default function App() {
         loading={authLoading}
         error={globalError}
         initialMode={authMode}
-        onBack={() => {
-          if (window.location.pathname === '/') {
-            setShowAuthForm(false);
-          }
-        }}
       />
     );
   }

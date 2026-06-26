@@ -72,7 +72,12 @@ export default function AdminShell({
                 className={`admin-nav__item ${activeTab === item.key ? 'is-active' : ''}`}
                 onClick={() => handleTabChange(item.key)}
               >
-                {item.label}
+                {item.icon ? (
+                  <span className="admin-nav__icon" aria-hidden="true">
+                    {item.icon}
+                  </span>
+                ) : null}
+                <span className="admin-nav__label">{item.label}</span>
               </button>
             ))}
           </nav>

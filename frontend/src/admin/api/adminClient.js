@@ -8,9 +8,10 @@ if (!resolvedApiBaseUrl) {
 
 const API_BASE_URL = resolvedApiBaseUrl.replace(/\/$/, '');
 const ADMIN_TOKEN_KEY = 'bilhete.admin.token';
+const USER_TOKEN_KEY = 'bilhete.token';
 
 function getAdminToken() {
-  return localStorage.getItem(ADMIN_TOKEN_KEY);
+  return localStorage.getItem(ADMIN_TOKEN_KEY) || localStorage.getItem(USER_TOKEN_KEY);
 }
 
 export function saveAdminToken(token) {
@@ -19,6 +20,7 @@ export function saveAdminToken(token) {
 
 export function clearAdminToken() {
   localStorage.removeItem(ADMIN_TOKEN_KEY);
+  localStorage.removeItem(USER_TOKEN_KEY);
 }
 
 async function request(path, options = {}) {
@@ -153,5 +155,41 @@ export const adminApi = {
         'Cache-Control': 'no-cache',
         Pragma: 'no-cache',
       },
+    }),
+  establishmentSupportTickets: ({ status } = {}) => {
+    const params = new URLSearchParams();
+    if (status) {
+      params.set('status', status);
+    }
+
+    const query = params.toString();
+    return request(`/establishment/support-tickets${query ? `?${query}` : ''}`);
+  },
+  createEstablishmentSupportTicket: (payload) =>
+    request('/establishment/support-tickets', { method: 'POST', body: JSON.stringify(payload) }),
+  establishmentSupportTicketMessages: (ticketId) =>
+    request(`/establishment/support-tickets/${ticketId}/messages`),
+  createEstablishmentSupportTicketMessage: (ticketId, payload) =>
+    request(`/establishment/support-tickets/${ticketId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  adminSupportTickets: ({ status } = {}) => {
+    const params = new URLSearchParams();
+    if (status) {
+      params.set('status', status);
+    }
+
+    const query = params.toString();
+    return request(`/admin/support-tickets${query ? `?${query}` : ''}`);
+  },
+  updateAdminSupportTicket: (ticketId, payload) =>
+    request(`/admin/support-tickets/${ticketId}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  adminSupportTicketMessages: (ticketId) =>
+    request(`/admin/support-tickets/${ticketId}/messages`),
+  createAdminSupportTicketMessage: (ticketId, payload) =>
+    request(`/admin/support-tickets/${ticketId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
     }),
 };
