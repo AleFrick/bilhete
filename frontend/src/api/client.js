@@ -8,6 +8,10 @@ if (!resolvedApiBaseUrl) {
 
 const API_BASE_URL = resolvedApiBaseUrl.replace(/\/$/, '');
 
+function buildApiUrl(path) {
+  return `${API_BASE_URL}${path}`;
+}
+
 function getToken() {
   return localStorage.getItem('bilhete.token');
 }
@@ -57,6 +61,9 @@ async function request(path, options = {}) {
 export const api = {
   register: (payload) => request('/auth/register', { method: 'POST', body: JSON.stringify(payload) }),
   login: (payload) => request('/auth/login', { method: 'POST', body: JSON.stringify(payload) }),
+  loginGoogle: (payload) => request('/auth/google', { method: 'POST', body: JSON.stringify(payload) }),
+  loginIcloud: (payload) => request('/auth/apple', { method: 'POST', body: JSON.stringify(payload) }),
+  loginFacebook: (payload) => request('/auth/facebook', { method: 'POST', body: JSON.stringify(payload) }),
 
   me: () => request('/me'),
   updateMe: (payload) => request('/me', { method: 'PUT', body: JSON.stringify(payload) }),
@@ -92,4 +99,17 @@ export const api = {
   messages: (chatId) => request(`/chats/${chatId}/messages`),
   sendMessage: (chatId, message) =>
     request(`/chats/${chatId}/messages`, { method: 'POST', body: JSON.stringify({ message }) }),
+  socialStartUrl: (provider) => {
+    if (provider === 'google') {
+      return buildApiUrl('/auth/google/start');
+    }
+    if (provider === 'icloud') {
+      return buildApiUrl('/auth/apple/start');
+    }
+    if (provider === 'facebook') {
+      return buildApiUrl('/auth/facebook/start');
+    }
+
+    throw new Error('Provedor social invalido.');
+  },
 };

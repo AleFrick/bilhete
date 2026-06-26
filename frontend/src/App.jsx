@@ -37,6 +37,42 @@ export default function App() {
   const [showAuthForm, setShowAuthForm] = useState(window.location.pathname !== '/');
   const locationCacheRef = useRef({ resolved: false, value: null });
 
+  const decodeBase64UrlJson = (value) => {
+    const normalized = String(value || '').replace(/-/g, '+').replace(/_/g, '/');
+    const padded = `${normalized}${'='.repeat((4 - (normalized.length % 4)) % 4)}`;
+    return JSON.parse(atob(padded));
+  };
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const socialToken = params.get('social_token');
+    const socialUserRaw = params.get('social_user');
+    const socialError = params.get('social_error');
+
+    if (!socialToken && !socialUserRaw && !socialError) {
+      return;
+    }
+
+    if (socialError) {
+      setGlobalError(socialError);
+    } else {
+      try {
+        const parsedUser = decodeBase64UrlJson(socialUserRaw);
+        persistSession(socialToken, parsedUser);
+        setMe(parsedUser);
+      } catch {
+        setGlobalError('Nao foi possivel concluir o login social.');
+      }
+    }
+
+    params.delete('social_token');
+    params.delete('social_user');
+    params.delete('social_error');
+    const nextQuery = params.toString();
+    const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ''}${window.location.hash}`;
+    window.history.replaceState({}, '', nextUrl);
+  }, []);
+
   const isAuthenticated = Boolean(me?.id);
 
   const getBrowserLocation = () =>
@@ -177,6 +213,12 @@ export default function App() {
     } finally {
       setAuthLoading(false);
     }
+  };
+
+  const handleSocialLogin = ({ provider }) => {
+    setGlobalError('');
+    const url = api.socialStartUrl(provider);
+    window.location.assign(url);
   };
 
   const handleLogout = () => {
@@ -369,6 +411,7 @@ export default function App() {
       <AuthPage
         onLogin={handleLogin}
         onRegister={handleRegister}
+        onSocialLogin={handleSocialLogin}
         loading={authLoading}
         error={globalError}
         initialMode={authMode}

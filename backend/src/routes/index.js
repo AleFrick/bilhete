@@ -23,7 +23,19 @@ import {
   updateEstablishmentAgendaEvent,
   upsertEstablishmentProfile,
 } from '../controllers/establishmentController.js';
-import { login, loginApple, loginGoogle, register } from '../controllers/authController.js';
+import {
+  appleOAuthCallback,
+  facebookOAuthCallback,
+  googleOAuthCallback,
+  login,
+  loginApple,
+  loginFacebook,
+  loginGoogle,
+  register,
+  startAppleOAuth,
+  startFacebookOAuth,
+  startGoogleOAuth,
+} from '../controllers/authController.js';
 import { inbox, outbox, respond, sendBilhete } from '../controllers/bilheteController.js';
 import { getCurrentCheckin, checkin, checkout } from '../controllers/checkinController.js';
 import { getMessages, listChats, listMatches, sendMessage } from '../controllers/chatController.js';
@@ -41,6 +53,13 @@ router.post('/auth/register', register);
 router.post('/auth/login', login);
 router.post('/auth/google', loginGoogle);
 router.post('/auth/apple', loginApple);
+router.post('/auth/facebook', loginFacebook);
+router.get('/auth/google/start', startGoogleOAuth);
+router.get('/auth/google/callback', googleOAuthCallback);
+router.get('/auth/facebook/start', startFacebookOAuth);
+router.get('/auth/facebook/callback', facebookOAuthCallback);
+router.get('/auth/apple/start', startAppleOAuth);
+router.get('/auth/apple/callback', appleOAuthCallback);
 router.post('/admin/auth/login', loginAdmin);
 
 router.get('/admin/venues', authRequired, adminRequired, listAdminVenues);
