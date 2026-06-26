@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import { adminApi } from '../api/adminClient';
+import AppNotice from '../../components/AppNotice';
 import Modal from '../../components/Modal';
 import SupportTicketDetailModal from '../components/SupportTicketDetailModal';
 
@@ -169,9 +170,19 @@ export default function AdminSupportTicketsPage() {
     setTicketMessageError('');
 
     try {
+      const isFirstAdminReply =
+        selectedTicket.status === 'open' && !ticketMessages.some((item) => item.senderRole === 'admin');
+
       await adminApi.createAdminSupportTicketMessage(selectedTicket.id, {
         message: ticketMessageDraft,
       });
+
+      if (isFirstAdminReply) {
+        const updatedTicket = await adminApi.updateAdminSupportTicket(selectedTicket.id, { status: 'in_progress' });
+        setTickets((prev) => prev.map((item) => (item.id === selectedTicket.id ? { ...item, ...updatedTicket } : item)));
+        setSelectedTicket((prev) => (prev && prev.id === selectedTicket.id ? { ...prev, ...updatedTicket } : prev));
+      }
+
       setTicketMessageDraft('');
       await loadTicketMessages(selectedTicket.id);
     } catch (requestError) {
@@ -183,11 +194,13 @@ export default function AdminSupportTicketsPage() {
 
   return (
     <div className="admin-page-stack">
-      {feedback ? (
-        <div className="admin-toast" role="status" aria-live="polite">
-          {feedback}
-        </div>
-      ) : null}
+      <AppNotice
+        message={feedback}
+        type="success"
+        floating
+        autoHideMs={3500}
+        onClose={() => setFeedback('')}
+      />
 
       <section className="panel">
         <div className="inline-row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
@@ -262,7 +275,7 @@ export default function AdminSupportTicketsPage() {
           </div>
         </form>
 
-        {error ? <p className="form-error">{error}</p> : null}
+        <AppNotice message={error} type="error" />
         {loadingTickets ? <p>Carregando chamados...</p> : null}
         {!loadingTickets && !hasTickets ? <p>Nenhum chamado encontrado.</p> : null}
         {!loadingTickets && hasTickets && !hasFilteredTickets ? <p>Nenhum chamado encontrado para os filtros selecionados.</p> : null}
@@ -315,7 +328,7 @@ export default function AdminSupportTicketsPage() {
                 <button
                   type="button"
                   className="btn btn--ghost btn--compact"
-                  onClick={() => handleSaveStatus(selectedTicket.id, 'open')}
+                  onClick={() => handleSaveStatus(selectedTicket.id, 'in_progress')}
                   disabled={savingTicketId === selectedTicket.id}
                 >
                   Reabrir

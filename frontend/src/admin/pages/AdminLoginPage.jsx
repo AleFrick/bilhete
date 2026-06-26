@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
+import AppNotice from '../../components/AppNotice';
 
-export default function AdminLoginPage({ loading, error, onLogin }) {
+export default function AdminLoginPage({ loading, error, onLogin, onClearError }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
@@ -46,7 +47,7 @@ export default function AdminLoginPage({ loading, error, onLogin }) {
             />
           </label>
 
-          {error ? <p className="form-error">{error}</p> : null}
+          <AppNotice message={error} type="error" onClose={onClearError} />
 
           <button type="submit" className="btn btn--primary" disabled={loading}>
             {loading ? 'Entrando...' : 'Entrar no painel'}

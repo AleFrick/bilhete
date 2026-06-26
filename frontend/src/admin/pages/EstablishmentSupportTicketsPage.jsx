@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { adminApi } from '../api/adminClient';
+import AppNotice from '../../components/AppNotice';
 import Modal from '../../components/Modal';
 import SupportTicketDetailModal from '../components/SupportTicketDetailModal';
 
@@ -277,11 +278,13 @@ export default function EstablishmentSupportTicketsPage() {
 
   return (
     <div className="admin-page-stack">
-      {feedback ? (
-        <div className="admin-toast" role="status" aria-live="polite">
-          {feedback}
-        </div>
-      ) : null}
+      <AppNotice
+        message={feedback}
+        type="success"
+        floating
+        autoHideMs={3500}
+        onClose={() => setFeedback('')}
+      />
 
       <section className="panel">
         <div className="inline-row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
@@ -360,7 +363,7 @@ export default function EstablishmentSupportTicketsPage() {
           </div>
         </form>
 
-        {loadingError ? <p className="form-error">{loadingError}</p> : null}
+        <AppNotice message={loadingError} type="error" />
 
         {loadingTickets ? <p>Carregando chamados...</p> : null}
         {!loadingTickets && !hasTickets ? <p>Nenhum chamado enviado até o momento.</p> : null}
@@ -504,7 +507,7 @@ export default function EstablishmentSupportTicketsPage() {
             ) : null}
           </div>
 
-          {submitError ? <p className="form-error">{submitError}</p> : null}
+          <AppNotice message={submitError} type="error" />
 
           <div className="inline-row" style={{ justifyContent: 'flex-end' }}>
             <button type="button" className="btn btn--ghost" onClick={() => setIsCreateModalOpen(false)} disabled={submitting}>

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { api } from './api/client';
+import AppNotice from './components/AppNotice';
 import AppShell from './layout/AppShell';
 import AuthPage from './pages/AuthPage';
 import BilhetesPage from './pages/BilhetesPage';
@@ -437,6 +438,7 @@ export default function App() {
         onSocialLogin={handleSocialLogin}
         loading={authLoading}
         error={globalError}
+        onClearError={() => setGlobalError('')}
         initialMode={authMode}
       />
     );
@@ -449,7 +451,7 @@ export default function App() {
       onLogout={handleLogout}
       premiumActive={Boolean(me?.premiumStatus)}
     >
-      {globalError ? <p className="global-error">{globalError}</p> : null}
+      <AppNotice message={globalError} type="error" onClose={() => setGlobalError('')} />
       {content}
     </AppShell>
   );

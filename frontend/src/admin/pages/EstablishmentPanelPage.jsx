@@ -3,6 +3,7 @@ import L from 'leaflet';
 import { MapContainer, Marker, TileLayer, useMap, useMapEvents } from 'react-leaflet';
 
 import { adminApi } from '../api/adminClient';
+import AppNotice from '../../components/AppNotice';
 
 import 'leaflet/dist/leaflet.css';
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
@@ -203,15 +204,6 @@ export default function EstablishmentPanelPage() {
       reader.onerror = () => reject(new Error('Não foi possível ler a imagem selecionada.'));
       reader.readAsDataURL(file);
     });
-
-  useEffect(() => {
-    const timer = feedback ? setTimeout(() => setFeedback(''), 3500) : null;
-    return () => {
-      if (timer) {
-        clearTimeout(timer);
-      }
-    };
-  }, [feedback]);
 
   useEffect(() => {
     setLogoLoadError(false);
@@ -706,11 +698,13 @@ export default function EstablishmentPanelPage() {
 
   return (
     <div className="admin-page-stack">
-      {feedback ? (
-        <div className="admin-toast" role="status" aria-live="polite">
-          {feedback}
-        </div>
-      ) : null}
+      <AppNotice
+        message={feedback}
+        type="success"
+        floating
+        autoHideMs={3500}
+        onClose={() => setFeedback('')}
+      />
 
       <section className="panel">
         <div className="inline-row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1034,7 +1028,7 @@ export default function EstablishmentPanelPage() {
             ) : null}
           </section>
 
-          {error ? <p className="form-error">{error}</p> : null}
+          <AppNotice message={error} type="error" />
 
           <button type="submit" className="btn btn--primary" disabled={savingProfile || loadingProfile}>
             {savingProfile ? 'Salvando...' : 'Salvar'}

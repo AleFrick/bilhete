@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { adminApi } from '../api/adminClient';
+import AppNotice from '../../components/AppNotice';
 
 function pad(value) {
   return String(value).padStart(2, '0');
@@ -184,15 +185,6 @@ export default function EstablishmentAgendaPage({ hasApprovedLink }) {
   useEffect(() => {
     loadAgenda();
   }, [hasApprovedLink]);
-
-  useEffect(() => {
-    if (!feedback) {
-      return undefined;
-    }
-
-    const timer = setTimeout(() => setFeedback(''), 3500);
-    return () => clearTimeout(timer);
-  }, [feedback]);
 
   const openModalForDay = (day) => {
     const dateValue = `${year}-${pad(month)}-${pad(day)}`;
@@ -432,11 +424,13 @@ export default function EstablishmentAgendaPage({ hasApprovedLink }) {
 
   return (
     <div className="admin-page-stack">
-      {feedback ? (
-        <div className="admin-toast" role="status" aria-live="polite">
-          {feedback}
-        </div>
-      ) : null}
+      <AppNotice
+        message={feedback}
+        type="success"
+        floating
+        autoHideMs={3500}
+        onClose={() => setFeedback('')}
+      />
 
       <section className="panel">
         <div className="inline-row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
@@ -444,7 +438,7 @@ export default function EstablishmentAgendaPage({ hasApprovedLink }) {
           <strong style={{ textTransform: 'capitalize' }}>{monthLabel}</strong>
         </div>
 
-        {error ? <p className="form-error">{error}</p> : null}
+        <AppNotice message={error} type="error" />
         {loadingEvents ? (
           <div className="admin-grid-loader" role="status" aria-live="polite" aria-label="Carregando agenda">
             <span className="spinner" aria-hidden="true" />

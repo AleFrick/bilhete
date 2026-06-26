@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import AppNotice from '../../components/AppNotice';
 
 function formatStatus(status) {
   if (status === 'pending') {
@@ -60,11 +61,13 @@ export default function AdminLinkRequestsPage({
 
   return (
     <div className="admin-page-stack">
-      {feedback ? (
-        <div className="admin-toast" role="status" aria-live="polite">
-          {feedback}
-        </div>
-      ) : null}
+      <AppNotice
+        message={feedback}
+        type="success"
+        floating
+        autoHideMs={3500}
+        onClose={() => setFeedback('')}
+      />
 
       <section className="panel">
         <div className="inline-row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
@@ -105,7 +108,7 @@ export default function AdminLinkRequestsPage({
           </button>
         </div>
 
-        {requestsError ? <p className="form-error">{requestsError}</p> : null}
+        <AppNotice message={requestsError} type="error" />
 
         {loadingRequests ? (
           <div className="admin-grid-loader" role="status" aria-live="polite" aria-label="Carregando pedidos">

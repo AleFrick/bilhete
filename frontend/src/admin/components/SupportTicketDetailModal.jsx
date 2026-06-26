@@ -1,4 +1,5 @@
 import Modal from '../../components/Modal';
+import AppNotice from '../../components/AppNotice';
 
 export default function SupportTicketDetailModal({
   isOpen,
@@ -91,7 +92,7 @@ export default function SupportTicketDetailModal({
             ) : (
               <div className="support-ticket-chat__panel">
                 <div className="support-ticket-chat">
-                  {ticketMessageError ? <p className="form-error">{ticketMessageError}</p> : null}
+                  <AppNotice message={ticketMessageError} type="error" />
                   {loadingTicketMessages ? <p>Carregando mensagens...</p> : null}
 
                   {!loadingTicketMessages ? (

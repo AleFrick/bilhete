@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 
 import { adminApi } from '../api/adminClient';
+import AppNotice from '../../components/AppNotice';
 
 function toIsoDate(value) {
   return value.toISOString().slice(0, 10);
@@ -73,7 +74,7 @@ export default function EstablishmentAgendaStatsPage({ hasApprovedLink }) {
           </label>
         </div>
 
-        {error ? <p className="form-error">{error}</p> : null}
+        <AppNotice message={error} type="error" />
 
         {result ? (
           <div className="agenda-stats">

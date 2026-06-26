@@ -508,6 +508,70 @@ textarea {
   height: 15px;
 }
 
+.app-notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid;
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.app-notice__message {
+  flex: 1;
+}
+
+.app-notice__close {
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: inherit;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.app-notice__close:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.app-notice--inline {
+  margin: 0;
+}
+
+.app-notice--floating {
+  position: fixed;
+  right: 18px;
+  top: 18px;
+  z-index: 5000;
+  width: min(360px, calc(100vw - 24px));
+  backdrop-filter: blur(4px);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
+  animation: admin-toast-in 0.2s ease;
+}
+
+.app-notice--error {
+  border-color: rgba(255, 45, 85, 0.35);
+  background: rgba(255, 45, 85, 0.18);
+  color: #ffccd6;
+}
+
+.app-notice--success {
+  border-color: rgba(52, 199, 89, 0.35);
+  background: rgba(52, 199, 89, 0.16);
+  color: #c8f7d5;
+}
+
+.app-notice--info {
+  border-color: rgba(82, 165, 255, 0.38);
+  background: rgba(82, 165, 255, 0.15);
+  color: #cfe6ff;
+}
+
 .form-error,
 .global-error {
   color: #ff708f;

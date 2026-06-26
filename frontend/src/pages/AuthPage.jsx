@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import AppNotice from '../components/AppNotice';
 
 export default function AuthPage({
   onLogin,
@@ -6,6 +7,7 @@ export default function AuthPage({
   onSocialLogin,
   loading,
   error,
+  onClearError,
   initialMode = 'login',
 }) {
   const [mode, setMode] = useState(initialMode === 'register' ? 'register' : 'login');
@@ -86,7 +88,7 @@ export default function AuthPage({
             />
           </label>
 
-          {error ? <p className="form-error">{error}</p> : null}
+          <AppNotice message={error} type="error" onClose={onClearError} />
 
           <button type="submit" className="btn btn--primary" disabled={loading}>
             {loading ? 'Enviando...' : mode === 'login' ? 'Entrar' : 'Cadastrar'}

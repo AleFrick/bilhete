@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import L from 'leaflet';
 import { MapContainer, Marker, TileLayer, useMap, useMapEvents } from 'react-leaflet';
 import { adminApi } from '../api/adminClient';
+import AppNotice from '../../components/AppNotice';
 
 import 'leaflet/dist/leaflet.css';
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
@@ -107,15 +108,6 @@ export default function AdminVenuesPage({
   const [editorMode, setEditorMode] = useState(null);
   const [editingVenueId, setEditingVenueId] = useState(null);
   const [form, setForm] = useState(INITIAL_FORM);
-
-  useEffect(() => {
-    if (!feedback) {
-      return undefined;
-    }
-
-    const timer = setTimeout(() => setFeedback(''), 3600);
-    return () => clearTimeout(timer);
-  }, [feedback]);
 
   const latitude = Number(form.lat);
   const longitude = Number(form.lng);
@@ -253,11 +245,13 @@ export default function AdminVenuesPage({
 
   return (
     <div className="admin-page-stack">
-      {feedback ? (
-        <div className="admin-toast" role="status" aria-live="polite">
-          {feedback}
-        </div>
-      ) : null}
+      <AppNotice
+        message={feedback}
+        type="success"
+        floating
+        autoHideMs={3600}
+        onClose={() => setFeedback('')}
+      />
 
       <section className="panel">
         <div className="inline-row" style={{ justifyContent: 'space-between' }}>
@@ -320,7 +314,7 @@ export default function AdminVenuesPage({
           </div>
         </div>
 
-        {error ? <p className="form-error">{error}</p> : null}
+        <AppNotice message={error} type="error" />
 
         {!hasSearched ? <p>Selecione uma cidade e clique em buscar para listar os locais.</p> : null}
         {hasSearched && loadingVenues ? (
