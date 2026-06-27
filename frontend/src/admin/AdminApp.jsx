@@ -5,6 +5,7 @@ import AdminShell from './layout/AdminShell';
 import EstablishmentPanelPage from './pages/EstablishmentPanelPage';
 import EstablishmentAgendaPage from './pages/EstablishmentAgendaPage';
 import EstablishmentAgendaStatsPage from './pages/EstablishmentAgendaStatsPage';
+import EstablishmentMenuPage from './pages/EstablishmentMenuPage';
 import AdminLinkRequestsPage from './pages/AdminLinkRequestsPage';
 import AdminSupportTicketsPage from './pages/AdminSupportTicketsPage';
 import AdminVenuesPage from './pages/AdminVenuesPage';
@@ -65,6 +66,9 @@ export default function AdminApp() {
           return prev;
         }
         if (prev === 'establishment-stats' && establishmentHasApprovedLink) {
+          return prev;
+        }
+        if (prev === 'establishment-menu' && establishmentHasApprovedLink) {
           return prev;
         }
         return 'establishment-profile';
@@ -344,6 +348,19 @@ export default function AdminApp() {
               ...(establishmentHasApprovedLink
                 ? [
                     {
+                      key: 'establishment-menu',
+                      label: 'Cardápio',
+                      icon: (
+                        <svg viewBox="0 0 24 24" focusable="false">
+                          <path d="M8 1a2 2 0 0 0-2 2v4H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-2V3a2 2 0 0 0-2-2H8Zm0 2h8v4H8V3ZM4 9h16v9H4V9Zm2 2h2v5H6v-5Zm4 0h2v5h-2v-5Zm4 0h2v5h-2v-5Z" />
+                        </svg>
+                      ),
+                    },
+                  ]
+                : []),
+              ...(establishmentHasApprovedLink
+                ? [
+                    {
                       key: 'establishment-stats',
                       label: 'Estatísticas',
                       icon: (
@@ -402,6 +419,10 @@ export default function AdminApp() {
 
       {isEstablishmentUser && activeTab === 'establishment-agenda' ? (
         <EstablishmentAgendaPage hasApprovedLink={establishmentHasApprovedLink} />
+      ) : null}
+
+      {isEstablishmentUser && activeTab === 'establishment-menu' ? (
+        <EstablishmentMenuPage hasApprovedLink={establishmentHasApprovedLink} />
       ) : null}
 
       {isEstablishmentUser && activeTab === 'establishment-stats' ? (

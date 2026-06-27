@@ -192,4 +192,11 @@ export const adminApi = {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
+  establishmentMenuItems: () => request('/establishment/menu'),
+  createMenuItem: (payload) =>
+    request('/establishment/menu', { method: 'POST', body: JSON.stringify(payload) }),
+  updateMenuItem: (itemId, payload) =>
+    request(`/establishment/menu/${itemId}`, { method: 'PUT', body: JSON.stringify(payload) }),
+  deleteMenuItem: (itemId) =>
+    request(`/establishment/menu/${itemId}`, { method: 'DELETE' }),
 };

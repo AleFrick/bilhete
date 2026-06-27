@@ -1,6 +1,8 @@
 import { useMemo, useState, useEffect } from 'react';
 
 import ExplorePage from './ExplorePage';
+import Modal from '../components/Modal';
+import RestaurantMenuPreview from '../components/RestaurantMenuPreview';
 import VenuePhotosModal from '../components/VenuePhotosModal';
 import VenueAgendaModal from '../components/VenueAgendaModal';
 import { api } from '../api/client';
@@ -101,10 +103,12 @@ export default function HomePage({
   const [hotspotFilter, setHotspotFilter] = useState('');
   const [openPhotosModal, setOpenPhotosModal] = useState(null);
   const [openAgendaModal, setOpenAgendaModal] = useState(null);
+  const [openMenuModal, setOpenMenuModal] = useState(null);
   const [venueDetailsCache, setVenueDetailsCache] = useState({});
+  const [venueMenuCache, setVenueMenuCache] = useState({});
   const radarByVenueId = new Map(radar.map((item) => [item.id, item]));
 
-  // Load venue details (photos and agenda) for all venues
+  // Load venue details (photos, agenda and menu) for all venues
   useEffect(() => {
     const loadVenueDetails = async (venueId) => {
       try {
@@ -116,7 +120,7 @@ export default function HomePage({
             hasEvents: (response.agendaEvents || []).length > 0,
           },
         }));
-      } catch (error) {
+      } catch {
         setVenueDetailsCache((prev) => ({
           ...prev,
           [venueId]: { hasPhotos: false, hasEvents: false },
@@ -124,9 +128,30 @@ export default function HomePage({
       }
     };
 
+    const loadVenueMenu = async (venueId) => {
+      try {
+        const response = await api.venueMenu(venueId);
+        const items = Array.isArray(response) ? response : [];
+        setVenueMenuCache((prev) => ({
+          ...prev,
+          [venueId]: {
+            hasMenu: items.length > 0,
+            items,
+          },
+        }));
+      } catch {
+        setVenueMenuCache((prev) => ({
+          ...prev,
+          [venueId]: { hasMenu: false, items: [] },
+        }));
+      }
+    };
+
     setVenueDetailsCache({});
+    setVenueMenuCache({});
     venues.forEach((venue) => {
       loadVenueDetails(venue.id);
+      loadVenueMenu(venue.id);
     });
   }, [venues]);
   const filteredVenues = useMemo(() => {
@@ -229,6 +254,17 @@ export default function HomePage({
                         Agenda
                       </button>
                     )}
+                    {venueMenuCache[venue.id]?.hasMenu && (
+                      <button
+                        type="button"
+                        className="btn btn--ghost btn--xs"
+                        title="Ver cardápio"
+                        aria-label={`Ver cardápio de ${venue.name}`}
+                        onClick={() => setOpenMenuModal(venue.id)}
+                      >
+                        Menu
+                      </button>
+                    )}
                     {venueDetailsCache[venue.id]?.hasPhotos && (
                       <button
                         type="button"
@@ -271,6 +307,7 @@ export default function HomePage({
         currentCheckin={currentCheckin}
         people={people}
         loadingPeople={loadingPeople}
+        loadingVenues={loadingVenues}
         onCheckin={onCheckin}
         onCheckout={onCheckout}
         onLoadPeople={onLoadPeople}
@@ -279,6 +316,27 @@ export default function HomePage({
         locationBlockedMessage={locationBlockedMessage}
         hideVenueList
       />
+
+      {openMenuModal && (
+        <Modal
+          isOpen={!!openMenuModal}
+          onClose={() => setOpenMenuModal(null)}
+          title={`Menu - ${venues.find((v) => v.id === openMenuModal)?.name || 'Local'}`}
+          className="restaurant-menu-preview-modal"
+          hideHeader
+        >
+          {venueMenuCache[openMenuModal]?.items?.length ? (
+            <RestaurantMenuPreview
+              title={venues.find((v) => v.id === openMenuModal)?.name || 'Menu do estabelecimento'}
+              subtitle="Confira as opções disponíveis neste local."
+              items={venueMenuCache[openMenuModal].items}
+              emptyMessage="Este estabelecimento ainda não cadastrou itens no menu."
+            />
+          ) : (
+            <p>Nenhum item disponível no momento.</p>
+          )}
+        </Modal>
+      )}
 
       {openPhotosModal && (
         <VenuePhotosModal

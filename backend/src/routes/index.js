@@ -12,15 +12,19 @@ import {
 } from '../controllers/adminVenueController.js';
 import {
   createEstablishmentAgendaEvent,
+  createEstablishmentMenuItem,
   deleteEstablishmentAgendaEvent,
+  deleteEstablishmentMenuItem,
   getEstablishmentAgendaStats,
   getEstablishmentProfile,
   listEstablishmentAgenda,
+  listEstablishmentMenuItems,
   listEstablishmentVenueRequests,
   requestNewVenue,
   requestVenueLink,
   searchVenuesForLink,
   updateEstablishmentAgendaEvent,
+  updateEstablishmentMenuItem,
   upsertEstablishmentProfile,
 } from '../controllers/establishmentController.js';
 import {
@@ -50,7 +54,7 @@ import { inbox, outbox, respond, sendBilhete } from '../controllers/bilheteContr
 import { getCurrentCheckin, checkin, checkout } from '../controllers/checkinController.js';
 import { getMessages, listChats, listMatches, sendMessage } from '../controllers/chatController.js';
 import { getMe, updateMe } from '../controllers/profileController.js';
-import { getRadar, getVenueDetails, listPeopleInVenue, listVenues } from '../controllers/venueController.js';
+import { getRadar, getVenueDetails, getVenueMenu, listPeopleInVenue, listVenues } from '../controllers/venueController.js';
 import { adminRequired, authRequired, establishmentRequired } from '../middleware/auth.js';
 
 const router = Router();
@@ -95,6 +99,10 @@ router.post('/establishment/agenda', authRequired, establishmentRequired, create
 router.put('/establishment/agenda/:eventId', authRequired, establishmentRequired, updateEstablishmentAgendaEvent);
 router.delete('/establishment/agenda/:eventId', authRequired, establishmentRequired, deleteEstablishmentAgendaEvent);
 router.get('/establishment/agenda/stats', authRequired, establishmentRequired, getEstablishmentAgendaStats);
+router.get('/establishment/menu', authRequired, establishmentRequired, listEstablishmentMenuItems);
+router.post('/establishment/menu', authRequired, establishmentRequired, createEstablishmentMenuItem);
+router.put('/establishment/menu/:itemId', authRequired, establishmentRequired, updateEstablishmentMenuItem);
+router.delete('/establishment/menu/:itemId', authRequired, establishmentRequired, deleteEstablishmentMenuItem);
 router.get('/establishment/geocode', authRequired, establishmentRequired, geocodeAdminAddress);
 router.get('/establishment/support-tickets', authRequired, establishmentRequired, listEstablishmentSupportTickets);
 router.post('/establishment/support-tickets', authRequired, establishmentRequired, createEstablishmentSupportTicket);
@@ -105,6 +113,7 @@ router.get('/me', authRequired, getMe);
 router.put('/me', authRequired, updateMe);
 
 router.get('/venues', authRequired, listVenues);
+router.get('/venues/:venueId/menu', authRequired, getVenueMenu);
 router.get('/venues/:venueId/details', authRequired, getVenueDetails);
 router.get('/venues/:venueId/people', authRequired, listPeopleInVenue);
 router.get('/radar', authRequired, getRadar);

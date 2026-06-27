@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 
+import { api } from '../api/client';
+import Modal from '../components/Modal';
+import RestaurantMenuPreview from '../components/RestaurantMenuPreview';
+
 const BILHETE_PRESETS = [
   { id: 'troquei_olhares', type: 'troquei_olhares', text: '👀 Te vi por aqui' },
   { id: 'emoji_brinde', type: 'emoji', text: '🥂 Bora brindar' },
@@ -44,6 +48,7 @@ export default function ExplorePage({
   currentCheckin,
   people,
   loadingPeople,
+  loadingVenues = false,
   onCheckin,
   onCheckout,
   onLoadPeople,
@@ -58,10 +63,16 @@ export default function ExplorePage({
   const [selectedPersonId, setSelectedPersonId] = useState(null);
   const [selectedPresetId, setSelectedPresetId] = useState(null);
   const [customMessage, setCustomMessage] = useState('');
+  const [displayedPeople, setDisplayedPeople] = useState([]);
+  const [menuStateByVenueId, setMenuStateByVenueId] = useState({});
+  const [showMenuModal, setShowMenuModal] = useState(false);
+  const [activeMenuVenue, setActiveMenuVenue] = useState(null);
+  const [activeMenuItems, setActiveMenuItems] = useState([]);
+  const [loadingMenu, setLoadingMenu] = useState(false);
 
   const selectedPerson = useMemo(
-    () => people.find((person) => person.id === selectedPersonId) || null,
-    [people, selectedPersonId]
+    () => displayedPeople.find((person) => person.id === selectedPersonId) || null,
+    [displayedPeople, selectedPersonId]
   );
 
   const selectedPreset = useMemo(
@@ -72,14 +83,15 @@ export default function ExplorePage({
   const filteredPeople = useMemo(() => {
     const normalizedFilter = peopleFilter.trim().toLowerCase();
     if (!normalizedFilter) {
-      return people;
+      return displayedPeople;
     }
 
-    return people.filter((person) => person.name.toLowerCase().includes(normalizedFilter));
-  }, [people, peopleFilter]);
+    return displayedPeople.filter((person) => person.name.toLowerCase().includes(normalizedFilter));
+  }, [displayedPeople, peopleFilter]);
 
   useEffect(() => {
     if (currentCheckin?.venueId) {
+      setDisplayedPeople([]);
       onLoadPeople(currentCheckin.venueId);
       setActiveScreen('people');
       return;
@@ -91,6 +103,7 @@ export default function ExplorePage({
     setSelectedPresetId(null);
     setCustomMessage('');
     setPeopleNotice('');
+    setDisplayedPeople([]);
   }, [currentCheckin?.venueId]);
 
   useEffect(() => {
@@ -98,10 +111,60 @@ export default function ExplorePage({
       return;
     }
 
-    if (!selectedPersonId || !people.some((person) => person.id === selectedPersonId)) {
+    if (!selectedPersonId || !displayedPeople.some((person) => person.id === selectedPersonId)) {
       setActiveScreen('people');
     }
-  }, [activeScreen, people, selectedPersonId]);
+  }, [activeScreen, displayedPeople, selectedPersonId]);
+
+  useEffect(() => {
+    if (!loadingPeople) {
+      setDisplayedPeople(people);
+    }
+  }, [loadingPeople, people]);
+
+  useEffect(() => {
+    if (!Array.isArray(venues) || !venues.length) {
+      return;
+    }
+
+    const loadVenueMenuAvailability = async () => {
+      for (const venue of venues) {
+        if (menuStateByVenueId[venue.id]) {
+          continue;
+        }
+
+        setMenuStateByVenueId((previous) => {
+          if (previous[venue.id]) {
+            return previous;
+          }
+
+          return {
+            ...previous,
+            [venue.id]: { loading: true, hasItems: false, items: [] },
+          };
+        });
+
+        try {
+          const items = await api.venueMenu(venue.id);
+          setMenuStateByVenueId((previous) => ({
+            ...previous,
+            [venue.id]: {
+              loading: false,
+              hasItems: Array.isArray(items) && items.length > 0,
+              items: Array.isArray(items) ? items : [],
+            },
+          }));
+        } catch {
+          setMenuStateByVenueId((previous) => ({
+            ...previous,
+            [venue.id]: { loading: false, hasItems: false, items: [] },
+          }));
+        }
+      }
+    };
+
+    loadVenueMenuAvailability();
+  }, [venues]);
 
   const handleSendBilhete = async () => {
     if (!currentCheckin || !selectedPerson) {
@@ -140,7 +203,49 @@ export default function ExplorePage({
     }
 
     setPeopleNotice('');
+    setDisplayedPeople([]);
     await onLoadPeople(currentCheckin.venueId);
+  };
+
+  const handleOpenMenu = async (venue) => {
+    const cachedMenu = menuStateByVenueId[venue.id];
+
+    if (cachedMenu?.hasItems && cachedMenu.items?.length) {
+      setActiveMenuVenue(venue);
+      setActiveMenuItems(cachedMenu.items);
+      setShowMenuModal(true);
+      return;
+    }
+
+    setLoadingMenu(true);
+    setActiveMenuVenue(venue);
+
+    try {
+      const items = await api.venueMenu(venue.id);
+      const normalizedItems = Array.isArray(items) ? items : [];
+
+      setMenuStateByVenueId((previous) => ({
+        ...previous,
+        [venue.id]: {
+          loading: false,
+          hasItems: normalizedItems.length > 0,
+          items: normalizedItems,
+        },
+      }));
+
+      if (normalizedItems.length) {
+        setActiveMenuItems(normalizedItems);
+        setShowMenuModal(true);
+      } else {
+        setActiveMenuItems([]);
+        setShowMenuModal(false);
+      }
+    } catch {
+      setActiveMenuItems([]);
+      setShowMenuModal(false);
+    } finally {
+      setLoadingMenu(false);
+    }
   };
 
   const handleBack = () => {
@@ -167,6 +272,11 @@ export default function ExplorePage({
               {locationBlockedMessage ||
                 'Sem localizacao ativa, o Bilhete perde a magia dos encontros por perto. Ative a permissao para liberar uma experiencia completa.'}
             </p>
+          ) : loadingVenues ? (
+            <div className="explore-loader" role="status" aria-live="polite">
+              <span className="spinner" aria-hidden="true" />
+              <p>Carregando locais...</p>
+            </div>
           ) : (
             <ul className="simple-list">
               {venues.map((venue) => (
@@ -192,15 +302,48 @@ export default function ExplorePage({
                     <p>{venue.address || 'Endereco nao informado'}</p>
                     {Number.isFinite(venue.distanceKm) ? <p>{venue.distanceKm} km de voce</p> : null}
                   </div>
-                  <button type="button" className="btn btn--primary" onClick={() => handleCheckin(venue.id)}>
-                    Check-in
-                  </button>
+                  <div className="inline-row" style={{ gap: '8px' }}>
+                    {menuStateByVenueId[venue.id]?.hasItems ? (
+                      <button
+                        type="button"
+                        className="btn btn--ghost"
+                        onClick={() => handleOpenMenu(venue)}
+                        disabled={loadingMenu}
+                        aria-label={`Abrir cardápio de ${venue.name}`}
+                        title={`Cardápio de ${venue.name}`}
+                      >
+                        ☰
+                      </button>
+                    ) : null}
+                    <button type="button" className="btn btn--primary" onClick={() => handleCheckin(venue.id)}>
+                      Check-in
+                    </button>
+                  </div>
                 </li>
               ))}
             </ul>
           )}
         </section>
       ) : null}
+
+      <Modal
+        isOpen={showMenuModal}
+        onClose={() => setShowMenuModal(false)}
+        title={activeMenuVenue ? `Cardápio de ${activeMenuVenue.name}` : 'Cardápio'}
+        className="restaurant-menu-preview-modal"
+        hideHeader
+      >
+        {activeMenuItems.length ? (
+          <RestaurantMenuPreview
+            title={activeMenuVenue?.name || 'Menu do estabelecimento'}
+            subtitle="Confira as opções disponíveis neste local."
+            items={activeMenuItems}
+            emptyMessage="Este estabelecimento ainda não cadastrou itens no menu."
+          />
+        ) : (
+          <p>Nenhum item disponível no momento.</p>
+        )}
+      </Modal>
 
       {currentCheckin && activeScreen !== 'venues' ? (
         <section className="panel explore-overlay" role="dialog" aria-modal="false">
@@ -252,8 +395,9 @@ export default function ExplorePage({
               ) : null}
               {!loadingPeople && !filteredPeople.length ? <p>Nenhuma pessoa encontrada neste local.</p> : null}
 
-              <ul className="simple-list people-list-mobile">
-                {filteredPeople.map((person) => (
+              {!loadingPeople && filteredPeople.length > 0 ? (
+                <ul className="simple-list people-list-mobile">
+                  {filteredPeople.map((person) => (
                   <li key={person.id}>
                     <div className="person-row-main">
                       <img src={getProfilePhoto(person)} alt={`Foto de ${person.name}`} className="person-avatar" />
@@ -271,8 +415,9 @@ export default function ExplorePage({
                       →
                     </button>
                   </li>
-                ))}
-              </ul>
+                  ))}
+                </ul>
+              ) : null}
             </>
           ) : selectedPerson ? (
             <section className="panel panel--person-detail">

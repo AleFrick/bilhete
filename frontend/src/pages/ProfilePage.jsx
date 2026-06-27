@@ -69,6 +69,13 @@ export default function ProfilePage({ me, onSave }) {
     photoUrls: parsePhotoUrls(me?.photoUrls),
     statusSocial: me?.statusSocial || 'observando',
   });
+  const [mainPhotoIndex, setMainPhotoIndex] = useState(0);
+  const [previewState, setPreviewState] = useState({
+    open: false,
+    url: '',
+    alt: 'Preview da foto',
+    index: 0,
+  });
 
   useEffect(() => {
     setForm({
@@ -77,6 +84,7 @@ export default function ProfilePage({ me, onSave }) {
       photoUrls: parsePhotoUrls(me?.photoUrls),
       statusSocial: me?.statusSocial || 'observando',
     });
+    setMainPhotoIndex(0);
   }, [me]);
 
   const handlePickPhoto = () => {
@@ -99,13 +107,117 @@ export default function ProfilePage({ me, onSave }) {
 
       setForm((prev) => ({
         ...prev,
-        photoUrls: [...prev.photoUrls, optimizedDataUrl].slice(0, 8),
+        photoUrls: [...prev.photoUrls, optimizedDataUrl].slice(0, 5),
       }));
     } catch (error) {
       // Keep silent; user can try selecting the image again.
     } finally {
       event.target.value = '';
     }
+  };
+
+  const handleRemovePhoto = (indexToRemove) => {
+    if (indexToRemove < 0 || indexToRemove >= form.photoUrls.length) {
+      return;
+    }
+
+    setForm((prev) => {
+      const nextUrls = prev.photoUrls.filter((_, index) => index !== indexToRemove);
+      return {
+        ...prev,
+        photoUrls: nextUrls,
+      };
+    });
+
+    if (mainPhotoIndex >= form.photoUrls.length - 1) {
+      setMainPhotoIndex(Math.max(0, form.photoUrls.length - 2));
+    } else if (indexToRemove <= mainPhotoIndex) {
+      setMainPhotoIndex(Math.max(0, mainPhotoIndex - 1));
+    }
+  };
+
+  const handleMovePhotoLeft = (index) => {
+    if (index <= 0) {
+      return;
+    }
+
+    setForm((prev) => {
+      const newUrls = [...prev.photoUrls];
+      [newUrls[index], newUrls[index - 1]] = [newUrls[index - 1], newUrls[index]];
+      return {
+        ...prev,
+        photoUrls: newUrls,
+      };
+    });
+  };
+
+  const handleMovePhotoRight = (index) => {
+    if (index >= form.photoUrls.length - 1) {
+      return;
+    }
+
+    setForm((prev) => {
+      const newUrls = [...prev.photoUrls];
+      [newUrls[index], newUrls[index + 1]] = [newUrls[index + 1], newUrls[index]];
+      return {
+        ...prev,
+        photoUrls: newUrls,
+      };
+    });
+  };
+
+  const openImagePreview = (index) => {
+    if (!form.photoUrls[index]) {
+      return;
+    }
+
+    setPreviewState({
+      open: true,
+      url: form.photoUrls[index],
+      alt: `Foto ${index + 1} do perfil`,
+      index,
+    });
+  };
+
+  const closeImagePreview = () => {
+    setPreviewState({
+      open: false,
+      url: '',
+      alt: 'Preview da foto',
+      index: 0,
+    });
+  };
+
+  const goToPreviousPreviewImage = () => {
+    if (form.photoUrls.length < 2) {
+      return;
+    }
+
+    setPreviewState((prev) => {
+      const nextIndex = (prev.index - 1 + form.photoUrls.length) % form.photoUrls.length;
+      return {
+        ...prev,
+        url: form.photoUrls[nextIndex],
+        alt: `Foto ${nextIndex + 1} do perfil`,
+        index: nextIndex,
+      };
+    });
+  };
+
+  const goToNextPreviewImage = () => {
+    if (form.photoUrls.length < 2) {
+      return;
+    }
+
+    setPreviewState((prev) => {
+      const nextIndex = (prev.index + 1) % form.photoUrls.length;
+      return {
+        ...prev,
+        url: form.photoUrls[nextIndex],
+        alt: `Foto ${nextIndex + 1} do perfil`,
+        index: nextIndex,
+      };
+    });
   };
 
   const handleSubmit = (event) => {
@@ -135,13 +247,75 @@ export default function ProfilePage({ me, onSave }) {
         <div className="profile-carousel" aria-label="Fotos do perfil">
           {form.photoUrls.map((photo, index) => (
             <article className="profile-photo-card" key={`${photo.slice(0, 24)}-${index}`}>
-              <img src={photo} alt={`Foto ${index + 1} do perfil`} />
+              <button
+                type="button"
+                className="profile-photo-card__image-btn"
+                onClick={() => openImagePreview(index)}
+                aria-label={`Ver foto ${index + 1}`}
+              >
+                <img src={photo} alt={`Foto ${index + 1} do perfil`} />
+              </button>
+              <span
+                role="button"
+                tabIndex={0}
+                className="profile-photo-card__trash"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  handleRemovePhoto(index);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    handleRemovePhoto(index);
+                  }
+                }}
+                aria-label={`Remover foto ${index + 1}`}
+                title="Remover foto"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M9 3h6l1 2h4v2H4V5h4l1-2zm1 6h2v9h-2V9zm4 0h2v9h-2V9zM7 9h2v9H7V9z" />
+                </svg>
+              </span>
+              <div className="profile-photo-card__controls">
+                <button
+                  type="button"
+                  className="profile-photo-card__move"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    handleMovePhotoLeft(index);
+                  }}
+                  disabled={index === 0}
+                  aria-label="Mover para esquerda"
+                  title="Mover para esquerda"
+                >
+                  ←
+                </button>
+                <button
+                  type="button"
+                  className="profile-photo-card__move"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    handleMovePhotoRight(index);
+                  }}
+                  disabled={index === form.photoUrls.length - 1}
+                  aria-label="Mover para direita"
+                  title="Mover para direita"
+                >
+                  →
+                </button>
+              </div>
             </article>
           ))}
 
-          <button type="button" className="profile-photo-add" onClick={handlePickPhoto} aria-label="Adicionar nova foto">
-            +
-          </button>
+          {form.photoUrls.length < 5 ? (
+            <button type="button" className="profile-photo-add" onClick={handlePickPhoto} aria-label="Adicionar nova foto">
+              +
+            </button>
+          ) : null}
 
           <input
             ref={fileInputRef}
@@ -197,6 +371,35 @@ export default function ProfilePage({ me, onSave }) {
           </button>
         </div>
       </form>
+
+      {previewState.open ? (
+        <div className="admin-overlay" role="dialog" aria-modal="true" aria-label="Preview da foto">
+          <div className="panel admin-overlay__content admin-image-modal">
+            <div className="admin-overlay__header">
+              <h2>Preview da foto</h2>
+              <button type="button" className="btn btn--ghost" onClick={closeImagePreview}>
+                Fechar
+              </button>
+            </div>
+            <div className="admin-image-preview">
+              <img src={previewState.url} alt={previewState.alt} />
+            </div>
+            {form.photoUrls.length > 1 ? (
+              <div className="admin-image-nav">
+                <button type="button" className="btn btn--ghost" onClick={goToPreviousPreviewImage}>
+                  ← Anterior
+                </button>
+                <span>
+                  {previewState.index + 1} de {form.photoUrls.length}
+                </span>
+                <button type="button" className="btn btn--ghost" onClick={goToNextPreviewImage}>
+                  Próxima →
+                </button>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

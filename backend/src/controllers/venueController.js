@@ -150,6 +150,45 @@ export async function listPeopleInVenue(req, res) {
   }
 }
 
+export async function getVenueMenu(req, res) {
+  const parsed = venueParamSchema.safeParse(req.params);
+  if (!parsed.success) {
+    return res.status(400).json({ message: 'venueId invalido.' });
+  }
+
+  try {
+    const [venueRows] = await pool.query(
+      `select establishment_id as establishmentId
+       from venues
+       where id = ?
+       limit 1`,
+      [parsed.data.venueId]
+    );
+
+    if (!venueRows.length || !venueRows[0].establishmentId) {
+      return res.json([]);
+    }
+
+    const [rows] = await pool.query(
+      `select
+        id,
+        name,
+        description,
+        price,
+        category,
+        image_url as imageUrl
+      from establishment_menu_items
+      where establishment_id = ?
+      order by created_at desc, id desc`,
+      [venueRows[0].establishmentId]
+    );
+
+    return res.json(rows);
+  } catch (error) {
+    return res.status(500).json({ message: 'Erro ao carregar cardapio do venue.' });
+  }
+}
+
 export async function getVenueDetails(req, res) {
   const parsed = venueParamSchema.safeParse(req.params);
   if (!parsed.success) {

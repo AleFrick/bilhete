@@ -84,6 +84,7 @@ export const api = {
   },
   venuePeople: (venueId) => request(`/venues/${venueId}/people`),
   venueDetails: (venueId) => request(`/venues/${venueId}/details`),
+  venueMenu: (venueId) => request(`/venues/${venueId}/menu`),
   radar: () => request('/radar'),
 
   currentCheckin: () => request('/checkins/current'),

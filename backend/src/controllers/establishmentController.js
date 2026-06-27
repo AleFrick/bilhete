@@ -76,6 +76,18 @@ const establishmentAgendaStatsQuerySchema = z.object({
     .regex(/^\d{4}-\d{2}-\d{2}$/),
 });
 
+const establishmentMenuItemSchema = z.object({
+  name: z.string().trim().min(1).max(180),
+  description: z.string().trim().max(2000).optional().or(z.literal('')),
+  price: z.union([z.string(), z.number(), z.null(), z.undefined()]).optional(),
+  category: z.string().trim().max(120).optional().or(z.literal('')),
+  imageUrl: z.string().trim().max(5000000).optional().or(z.literal('')),
+});
+
+const establishmentMenuItemParamSchema = z.object({
+  itemId: z.coerce.number().int().positive(),
+});
+
 function normalizeAnalyticsMetadata(value) {
   if (!value) {
     return {};
@@ -114,6 +126,63 @@ function normalizeAgendaEventRow(row) {
   return {
     ...row,
     analyticsMetadata: normalizeAnalyticsMetadata(row.analyticsMetadata),
+  };
+}
+
+function normalizeMenuItemPrice(value) {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+
+  const source = typeof value === 'number' ? String(value) : String(value).trim();
+  if (!source) {
+    return null;
+  }
+
+  const sanitized = source.replace(/\s/g, '').replace(/[^\d,.-]/g, '');
+  if (!sanitized) {
+    return null;
+  }
+
+  const hasComma = sanitized.includes(',');
+  const hasDot = sanitized.includes('.');
+
+  let normalized = sanitized;
+  if (hasComma && hasDot) {
+    const lastComma = sanitized.lastIndexOf(',');
+    const lastDot = sanitized.lastIndexOf('.');
+    const decimalSeparator = lastComma > lastDot ? ',' : '.';
+    const thousandsSeparator = decimalSeparator === ',' ? '.' : ',';
+    normalized = sanitized
+      .replace(new RegExp(`\\${thousandsSeparator}`, 'g'), '')
+      .replace(decimalSeparator, '.');
+  } else if (hasComma) {
+    normalized = sanitized.replace(',', '.');
+  } else if (hasDot) {
+    const dotCount = sanitized.split('.').length - 1;
+    if (dotCount > 1) {
+      normalized = sanitized.replace(/\./g, '');
+    }
+  }
+
+  const parsed = Number.parseFloat(normalized);
+  if (!Number.isFinite(parsed)) {
+    return null;
+  }
+
+  return parsed.toFixed(2);
+}
+
+function normalizeMenuItemRow(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    description: row.description,
+    price: row.price === null ? null : String(row.price),
+    category: row.category,
+    imageUrl: row.imageUrl,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
   };
 }
 
@@ -229,6 +298,167 @@ async function loadEstablishmentAgendaEvent(establishmentId, eventId) {
   }
 
   return normalizeAgendaEventRow(rows[0]);
+}
+
+async function loadEstablishmentMenuItem(establishmentId, itemId) {
+  const [rows] = await pool.query(
+    `select
+      id,
+      establishment_id as establishmentId,
+      name,
+      description,
+      price,
+      category,
+      category,
+      image_url as imageUrl,
+      created_at as createdAt,
+      updated_at as updatedAt
+    from establishment_menu_items
+    where id = ?
+      and establishment_id = ?
+    limit 1`,
+    [itemId, establishmentId]
+  );
+
+  return rows[0] ? normalizeMenuItemRow(rows[0]) : null;
+}
+
+export async function listEstablishmentMenuItems(req, res) {
+  try {
+    const establishmentId = await ensureEstablishmentRecord(req.user.id);
+
+    const [rows] = await pool.query(
+      `select
+        id,
+        establishment_id as establishmentId,
+        name,
+        description,
+        price,
+        category,
+        image_url as imageUrl,
+        created_at as createdAt,
+        updated_at as updatedAt
+      from establishment_menu_items
+      where establishment_id = ?
+      order by created_at desc, id desc`,
+      [establishmentId]
+    );
+
+    return res.json(rows.map(normalizeMenuItemRow));
+  } catch (error) {
+    return res.status(500).json({ message: 'Erro ao carregar cardápio do estabelecimento.' });
+  }
+}
+
+export async function createEstablishmentMenuItem(req, res) {
+  const parsed = establishmentMenuItemSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ message: 'Dados inválidos para o item do cardápio.' });
+  }
+
+  try {
+    const establishmentId = await ensureEstablishmentRecord(req.user.id);
+    const payload = parsed.data;
+    const normalizedPrice = normalizeMenuItemPrice(payload.price);
+
+    const [insertResult] = await pool.query(
+      `insert into establishment_menu_items (
+        establishment_id,
+        name,
+        description,
+        price,
+        category,
+        image_url
+      ) values (?, ?, ?, ?, ?, ?)` ,
+      [
+        establishmentId,
+        payload.name,
+        payload.description || null,
+        normalizedPrice,
+        payload.category || null,
+        payload.imageUrl || null,
+      ]
+    );
+
+    const item = await loadEstablishmentMenuItem(establishmentId, insertResult.insertId);
+    return res.status(201).json(item);
+  } catch (error) {
+    return res.status(500).json({ message: 'Erro ao salvar item do cardápio.' });
+  }
+}
+
+export async function updateEstablishmentMenuItem(req, res) {
+  const parsedParams = establishmentMenuItemParamSchema.safeParse(req.params);
+  if (!parsedParams.success) {
+    return res.status(400).json({ message: 'Item de cardápio inválido.' });
+  }
+
+  const parsed = establishmentMenuItemSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ message: 'Dados inválidos para o item do cardápio.' });
+  }
+
+  try {
+    const establishmentId = await ensureEstablishmentRecord(req.user.id);
+    const existing = await loadEstablishmentMenuItem(establishmentId, parsedParams.data.itemId);
+    if (!existing) {
+      return res.status(404).json({ message: 'Item do cardápio não encontrado.' });
+    }
+
+    const payload = parsed.data;
+    const normalizedPrice = normalizeMenuItemPrice(payload.price);
+
+    await pool.query(
+      `update establishment_menu_items
+       set name = ?,
+           description = ?,
+           price = ?,
+           category = ?,
+           image_url = ?
+       where id = ?
+         and establishment_id = ?`,
+      [
+        payload.name,
+        payload.description || null,
+        normalizedPrice,
+        payload.category || null,
+        payload.imageUrl || null,
+        parsedParams.data.itemId,
+        establishmentId,
+      ]
+    );
+
+    const item = await loadEstablishmentMenuItem(establishmentId, parsedParams.data.itemId);
+    return res.json(item);
+  } catch (error) {
+    return res.status(500).json({ message: 'Erro ao atualizar item do cardápio.' });
+  }
+}
+
+export async function deleteEstablishmentMenuItem(req, res) {
+  const parsedParams = establishmentMenuItemParamSchema.safeParse(req.params);
+  if (!parsedParams.success) {
+    return res.status(400).json({ message: 'Item de cardápio inválido.' });
+  }
+
+  try {
+    const establishmentId = await ensureEstablishmentRecord(req.user.id);
+    const existing = await loadEstablishmentMenuItem(establishmentId, parsedParams.data.itemId);
+    if (!existing) {
+      return res.status(404).json({ message: 'Item do cardápio não encontrado.' });
+    }
+
+    await pool.query(
+      `delete from establishment_menu_items
+       where id = ?
+         and establishment_id = ?`,
+      [parsedParams.data.itemId, establishmentId]
+    );
+
+    return res.status(204).send();
+  } catch (error) {
+    return res.status(500).json({ message: 'Erro ao excluir item do cardápio.' });
+  }
 }
 
 export async function getEstablishmentProfile(req, res) {
