@@ -69,6 +69,20 @@ export async function listVenues(req, res) {
       console.log(
         `[debug] listVenues params lat=${parsedQuery.data.lat} lng=${parsedQuery.data.lng} radiusKm=${parsedQuery.data.radiusKm} rows=${Array.isArray(locationRows) ? locationRows.length : 0}`
       );
+
+      // Debug: run the same SQL with values inlined to compare prepared vs raw execution
+      try {
+        const rawSql = `select v.id, v.name, v.address, v.partner_status as partnerStatus, v.category, e.logo_url as establishmentLogoUrl, v.created_at as createdAt, round(6371 * acos( least(1, greatest(-1, cos(radians(${Number(
+          parsedQuery.data.lat
+        )})) * cos(radians(v.lat)) * cos(radians(v.lng) - radians(${Number(parsedQuery.data.lng)})) + sin(radians(${Number(parsedQuery.data.lat)})) * sin(radians(v.lat)) ) ) ), 2) as distanceKm from venues v left join establishments e on e.id = v.establishment_id where v.lat is not null and v.lng is not null having distanceKm <= ${Number(parsedQuery.data.radiusKm)} order by distanceKm asc, v.created_at desc`;
+
+        const [rawRows] = await pool.query(rawSql);
+        console.log(
+          `[debug] listVenues rawSql rows=${Array.isArray(rawRows) ? rawRows.length : 0}`
+        );
+      } catch (err) {
+        console.error('[debug] listVenues rawSql error', err && err.message ? err.message : err);
+      }
     } else {
       const [defaultRows] = await pool.query(
         `select
