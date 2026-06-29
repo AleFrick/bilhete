@@ -1,5 +1,5 @@
 const envApiBaseUrl = import.meta.env.VITE_API_URL;
-const fallbackApiBaseUrl = import.meta.env.DEV ? 'http://localhost:3333/api' : '';
+const fallbackApiBaseUrl = import.meta.env.DEV ? 'http://localhost:3333/api' : '/api';
 const resolvedApiBaseUrl = envApiBaseUrl || fallbackApiBaseUrl;
 
 if (!resolvedApiBaseUrl) {

@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "docker:build": "node scripts/docker.js build https://bilhetedev.duckdns.org:82/api",
+    "docker:build": "node scripts/docker.js build /api",
     "docker:run": "node scripts/docker.js run",
     "docker:deploy": "npm run docker:build && npm run docker:run"
   },

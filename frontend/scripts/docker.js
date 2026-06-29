@@ -2,7 +2,7 @@ import { spawnSync } from 'child_process';
 
 const imageName = 'bilhete-frontend:latest';
 const containerName = 'bilhete-frontend';
-const defaultApiUrl = 'http://68.168.222.85:3333/api';
+const defaultApiUrl = '/api';
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
