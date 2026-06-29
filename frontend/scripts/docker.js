@@ -24,6 +24,7 @@ if (action === 'build') {
 
   run('docker', [
     'build',
+    '--no-cache',
     '-t',
     imageName,
     '--build-arg',
