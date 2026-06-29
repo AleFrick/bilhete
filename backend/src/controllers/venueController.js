@@ -66,6 +66,9 @@ export async function listVenues(req, res) {
       );
 
       rows = locationRows;
+      console.log(
+        `[debug] listVenues params lat=${parsedQuery.data.lat} lng=${parsedQuery.data.lng} radiusKm=${parsedQuery.data.radiusKm} rows=${Array.isArray(locationRows) ? locationRows.length : 0}`
+      );
     } else {
       const [defaultRows] = await pool.query(
         `select
