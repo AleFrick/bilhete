@@ -209,8 +209,36 @@ async function ensureEstablishmentRecord(userId) {
   );
 
   const user = userRows[0];
-  const displayName = user?.name || 'Estabelecimento';
-  const contactEmail = user?.email || null;
+  if (!user) {
+    throw new Error('Usuario nao encontrado.');
+  }
+
+  const [claimableRows] = await pool.query(
+    `select id
+     from establishments
+     where user_id is null
+       and (contact_email is null or contact_email = ?)
+     order by created_at asc
+     limit 1`,
+    [user.email || null]
+  );
+
+  const claimable = claimableRows[0];
+  if (claimable) {
+    await pool.query(
+      `update establishments
+       set user_id = ?,
+           display_name = coalesce(display_name, ?),
+           contact_email = coalesce(contact_email, ?)
+       where id = ?`,
+      [userId, user.name || 'Estabelecimento', user.email || null, claimable.id]
+    );
+
+    return claimable.id;
+  }
+
+  const displayName = user.name || 'Estabelecimento';
+  const contactEmail = user.email || null;
 
   const [insertResult] = await pool.query(
     `insert into establishments (user_id, display_name, contact_email)

@@ -9,8 +9,8 @@ create table if not exists users (
 
 create table if not exists establishments (
   id bigint primary key auto_increment,
-  user_id bigint not null unique,
-  display_name varchar(160) not null,
+  user_id bigint null unique,
+  display_name varchar(160),
   city varchar(120),
   address varchar(220),
   lat decimal(10, 7),
