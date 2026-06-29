@@ -18,7 +18,8 @@
     "docker:build": "node scripts/docker.js build",
     "docker:run": "node scripts/docker.js run",
     "docker:run:prod": "node scripts/docker.js run .env.production",
-    "docker:run:dev": "node scripts/docker.js run .env.development"
+    "docker:run:dev": "node scripts/docker.js run .env.development",
+    "docker:deploy": "npm run docker:build && npm run docker:run"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
