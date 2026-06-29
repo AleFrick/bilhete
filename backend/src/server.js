@@ -109,6 +109,21 @@ async function startServer() {
     await pool.query('select 1');
     startupDbStatus = 'connected';
     logInfo('Database connection check succeeded');
+    try {
+      const [countRows] = await pool.query('select count(*) as cnt from venues');
+      const cnt = Array.isArray(countRows) && countRows.length ? countRows[0].cnt : 'unknown';
+      logInfo(`venues count=${cnt}`);
+
+      const [bodegaRows] = await pool.query("select id, name, lat, lng from venues where name like 'Bodega%'");
+      logInfo(`venues bodega_found=${Array.isArray(bodegaRows) ? bodegaRows.length : 0}`);
+      if (Array.isArray(bodegaRows) && bodegaRows.length) {
+        for (const r of bodegaRows.slice(0, 5)) {
+          logInfo(`venues bodega row id=${r.id} name=${r.name} lat=${r.lat} lng=${r.lng}`);
+        }
+      }
+    } catch (err) {
+      logError('Error while querying venues count at startup', err);
+    }
   } catch (error) {
     startupDbStatus = 'failed';
     logError('Database connection check failed during startup', error);
