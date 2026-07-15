@@ -36,6 +36,7 @@ import {
   loginFacebook,
   loginGoogle,
   register,
+  verifyRegistrationEmail,
   startAppleOAuth,
   startFacebookOAuth,
   startGoogleOAuth,
@@ -53,6 +54,20 @@ import {
 import { inbox, outbox, respond, sendBilhete } from '../controllers/bilheteController.js';
 import { getCurrentCheckin, checkin, checkout } from '../controllers/checkinController.js';
 import { getMessages, listChats, listMatches, sendMessage } from '../controllers/chatController.js';
+import {
+  confirmPremiumOrderPayment,
+  createAdminPremiumCoupon,
+  createAdminPremiumPackage,
+  createAdminPremiumPromotion,
+  createPremiumCheckout,
+  listAdminPremiumCoupons,
+  listAdminPremiumPackages,
+  listAdminPremiumPromotions,
+  listPremiumCatalog,
+  updateAdminPremiumCoupon,
+  updateAdminPremiumPackage,
+  updateAdminPremiumPromotion,
+} from '../controllers/premiumController.js';
 import { getMe, updateMe } from '../controllers/profileController.js';
 import { getRadar, getVenueDetails, getVenueMenu, listPeopleInVenue, listVenues } from '../controllers/venueController.js';
 import { adminRequired, authRequired, establishmentRequired } from '../middleware/auth.js';
@@ -74,6 +89,7 @@ router.get('/auth/facebook/start', startFacebookOAuth);
 router.get('/auth/facebook/callback', facebookOAuthCallback);
 router.get('/auth/apple/start', startAppleOAuth);
 router.get('/auth/apple/callback', appleOAuthCallback);
+router.get('/auth/verify-email', verifyRegistrationEmail);
 router.post('/admin/auth/login', loginAdmin);
 
 router.get('/admin/venues', authRequired, adminRequired, listAdminVenues);
@@ -87,6 +103,15 @@ router.get('/admin/support-tickets', authRequired, adminRequired, listAdminSuppo
 router.patch('/admin/support-tickets/:ticketId', authRequired, adminRequired, updateAdminSupportTicket);
 router.get('/admin/support-tickets/:ticketId/messages', authRequired, adminRequired, listAdminSupportTicketMessages);
 router.post('/admin/support-tickets/:ticketId/messages', authRequired, adminRequired, createAdminSupportTicketMessage);
+router.get('/admin/premium/packages', authRequired, adminRequired, listAdminPremiumPackages);
+router.post('/admin/premium/packages', authRequired, adminRequired, createAdminPremiumPackage);
+router.put('/admin/premium/packages/:packageId', authRequired, adminRequired, updateAdminPremiumPackage);
+router.get('/admin/premium/coupons', authRequired, adminRequired, listAdminPremiumCoupons);
+router.post('/admin/premium/coupons', authRequired, adminRequired, createAdminPremiumCoupon);
+router.put('/admin/premium/coupons/:couponId', authRequired, adminRequired, updateAdminPremiumCoupon);
+router.get('/admin/premium/promotions', authRequired, adminRequired, listAdminPremiumPromotions);
+router.post('/admin/premium/promotions', authRequired, adminRequired, createAdminPremiumPromotion);
+router.put('/admin/premium/promotions/:promotionId', authRequired, adminRequired, updateAdminPremiumPromotion);
 
 router.get('/establishment/profile', authRequired, establishmentRequired, getEstablishmentProfile);
 router.put('/establishment/profile', authRequired, establishmentRequired, upsertEstablishmentProfile);
@@ -117,6 +142,9 @@ router.get('/venues/:venueId/menu', authRequired, getVenueMenu);
 router.get('/venues/:venueId/details', authRequired, getVenueDetails);
 router.get('/venues/:venueId/people', authRequired, listPeopleInVenue);
 router.get('/radar', authRequired, getRadar);
+router.get('/premium/catalog', authRequired, listPremiumCatalog);
+router.post('/premium/checkout', authRequired, createPremiumCheckout);
+router.post('/premium/orders/:orderId/confirm', authRequired, confirmPremiumOrderPayment);
 
 router.get('/checkins/current', authRequired, getCurrentCheckin);
 router.post('/checkins', authRequired, checkin);

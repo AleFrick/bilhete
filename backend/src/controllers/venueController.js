@@ -132,7 +132,15 @@ export async function listPeopleInVenue(req, res) {
         p.age,
         p.photo_urls as photoUrls,
         p.status_social as statusSocial,
-        p.premium_status as premiumStatus,
+        case
+          when exists (
+            select 1 from premium_subscriptions ps
+            where ps.user_id = p.user_id
+              and ps.status = 'active'
+              and ps.ends_at > current_timestamp
+          ) then 1
+          else 0
+        end as premiumStatus,
         c.checked_in_at as checkedInAt
       from profiles p
       join checkins c on c.user_id = p.user_id
@@ -258,6 +266,8 @@ export async function getVenueDetails(req, res) {
           party_flyer_url as partyFlyerUrl
         from establishment_agenda_events
         where establishment_id = ?
+          and event_date >= date_sub(curdate(), interval weekday(curdate()) day)
+          and event_date <= date_add(date_sub(curdate(), interval weekday(curdate()) day), interval 6 day)
         order by event_date asc, start_time asc`,
         [venue.establishmentId]
       );
@@ -279,15 +289,12 @@ export async function getVenueDetails(req, res) {
 export async function getRadar(req, res) {
   try {
     const [profileRows] = await pool.query(
-      `select
-        case
-          when premium_status = 1 and (premium_expires_at is null or premium_expires_at > current_timestamp)
-            then 1
-          else 0
-        end as premiumStatus
-      from profiles
-      where user_id = ?
-      limit 1`,
+      `select exists (
+        select 1 from premium_subscriptions
+        where user_id = ?
+          and status = 'active'
+          and ends_at > current_timestamp
+      ) as premiumStatus`,
       [req.user.id]
     );
 

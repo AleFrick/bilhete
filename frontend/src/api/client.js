@@ -100,6 +100,9 @@ export const api = {
   messages: (chatId) => request(`/chats/${chatId}/messages`),
   sendMessage: (chatId, message) =>
     request(`/chats/${chatId}/messages`, { method: 'POST', body: JSON.stringify({ message }) }),
+  premiumCatalog: () => request('/premium/catalog'),
+  premiumCheckout: (payload) => request('/premium/checkout', { method: 'POST', body: JSON.stringify(payload) }),
+  premiumConfirmOrder: (orderId) => request(`/premium/orders/${orderId}/confirm`, { method: 'POST' }),
   socialStartUrl: (provider) => {
     if (provider === 'google') {
       return buildApiUrl('/auth/google/start');

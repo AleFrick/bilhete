@@ -11,6 +11,26 @@
 
 * {
   box-sizing: border-box;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
 }
 
 html,
@@ -616,15 +636,16 @@ textarea {
 .topbar__premium-badge {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: linear-gradient(145deg, #f8db7b, #c9972f);
+  gap: 3px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #f8db7b, #c9972f);
   color: #2b2106;
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 700;
-  box-shadow: 0 0 0 1px rgba(248, 219, 123, 0.35);
+  letter-spacing: 0.04em;
+  box-shadow: 0 0 8px rgba(248, 219, 123, 0.4);
+  white-space: nowrap;
 }
 
 .topbar__title {
@@ -2312,10 +2333,10 @@ textarea {
   background: rgba(28, 28, 36, 0.96);
   border: 1px solid var(--line);
   border-radius: 14px;
-  padding: 8px;
+  padding: 6px;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 4px;
 }
 
 .bottom-tabs__item {
@@ -2323,8 +2344,12 @@ textarea {
   background: transparent;
   color: var(--muted);
   border-radius: 10px;
-  height: 40px;
+  height: 36px;
+  font-size: 0.72rem;
   cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .bottom-tabs__item.is-active {
@@ -3559,7 +3584,7 @@ textarea {
   }
 
   .bottom-tabs {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 
   .admin-shell__sidebar {

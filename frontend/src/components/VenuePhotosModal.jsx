@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import Modal from './Modal';
+import AppNotice from './AppNotice';
 import { api } from '../api/client';
 
 export default function VenuePhotosModal({ isOpen, onClose, venueId, venueName }) {
@@ -35,7 +36,7 @@ export default function VenuePhotosModal({ isOpen, onClose, venueId, venueName }
       {loading ? (
         <p className="modal__loading">Carregando fotos...</p>
       ) : error ? (
-        <p className="modal__error">{error}</p>
+        <AppNotice message={error} type="error" closable={false} />
       ) : photos.length === 0 ? (
         <p className="modal__empty">Nenhuma foto cadastrada</p>
       ) : (

@@ -1,5 +1,6 @@
 const tabs = [
   { key: 'home', label: 'Explorar' },
+  { key: 'premium', label: 'Premium' },
   { key: 'bilhetes', label: 'Bilhetes' },
   { key: 'chats', label: 'Conversas' },
   { key: 'profile', label: 'Perfil' },
@@ -11,7 +12,9 @@ export default function AppShell({ activeTab, onTabChange, onLogout, children, p
       <header className="topbar">
         <div className="topbar__brand">
           <p className="topbar__eyebrow">Bilhete</p>
-          {premiumActive ? <span className="topbar__premium-badge" title="Premium ativo">★</span> : null}
+          {premiumActive ? (
+            <span className="topbar__premium-badge" title="Premium ativo">✦ Premium</span>
+          ) : null}
         </div>
         <button type="button" className="btn btn--ghost" onClick={onLogout}>
           Sair

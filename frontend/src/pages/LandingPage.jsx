@@ -58,7 +58,7 @@ export default function LandingPage({ onCreateAccount, onEnter }) {
 
         <div className="landing-hero__content">
           <p className="hero__tag">Bilhete</p>
-          <h1>Olhou, sorriu, virou conversa.</h1>
+          <h1>Transforme olhares em encontros.</h1>
           <p className="landing-hero__text">
             O Bilhete conecta quem está no mesmo lugar com um clima leve, divertido e cheio de
             possibilidade. Menos feed infinito, mais papo que começa ao vivo.

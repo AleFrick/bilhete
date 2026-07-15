@@ -3,7 +3,7 @@ import dotenv from 'dotenv';
 const environment = process.env.NODE_ENV === 'production' ? 'production' : 'development';
 const envPath = `.env.${environment}`;
 
-dotenv.config({ path: envPath });
+dotenv.config({ path: envPath, override: true });
 dotenv.config();
 
 export const env = {
@@ -23,8 +23,18 @@ export const env = {
   passwordClientHashEnabled: (process.env.PASSWORD_CLIENT_HASH_ENABLED || 'false') === 'true',
   passwordHashAlgorithm: process.env.PASSWORD_HASH_ALGORITHM || 'sha512',
   passwordHashSecret: process.env.PASSWORD_HASH_SECRET || process.env.JWT_SECRET || 'troque_este_segredo',
+  authPasswordMinStrength: Number(process.env.AUTH_PASSWORD_MIN_STRENGTH || 2),
   jwtSecret: process.env.JWT_SECRET || 'troque_este_segredo',
   frontendAppUrl: process.env.FRONTEND_APP_URL || 'http://localhost:5173/app',
+  emailVerificationBaseUrl: process.env.EMAIL_VERIFICATION_BASE_URL || 'http://localhost:3333',
+  emailVerificationTtlHours: Number(process.env.EMAIL_VERIFICATION_TTL_HOURS || 24),
+  emailTransport: process.env.EMAIL_TRANSPORT || 'log',
+  smtpHost: process.env.SMTP_HOST || '',
+  smtpPort: Number(process.env.SMTP_PORT || 587),
+  smtpUser: process.env.SMTP_USER || '',
+  smtpPass: process.env.SMTP_PASS || '',
+  smtpSecure: (process.env.SMTP_SECURE || 'false') === 'true',
+  smtpFrom: process.env.SMTP_FROM || 'Bilhete <no-reply@bilhete.app>',
   googleClientId: process.env.GOOGLE_CLIENT_ID || '',
   googleClientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
   googleRedirectUri: process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3333/api/auth/google/callback',

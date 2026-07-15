@@ -8,6 +8,7 @@ import BilhetesPage from './pages/BilhetesPage';
 import ChatsPage from './pages/ChatsPage';
 import HomePage from './pages/HomePage';
 import LandingPage from './pages/LandingPage';
+import PremiumPage from './pages/PremiumPage';
 import ProfilePage from './pages/ProfilePage';
 import { clearSession, loadUser, persistSession } from './state/session';
 
@@ -35,6 +36,7 @@ function redirectToRoleRoute(user) {
 export default function App() {
   const [authLoading, setAuthLoading] = useState(false);
   const [globalError, setGlobalError] = useState('');
+  const [globalSuccess, setGlobalSuccess] = useState('');
   const [activeTab, setActiveTab] = useState('home');
 
   const [me, setMe] = useState(loadUser());
@@ -210,6 +212,7 @@ export default function App() {
   const handleLogin = async (payload) => {
     setAuthLoading(true);
     setGlobalError('');
+    setGlobalSuccess('');
 
     try {
       const data = await api.login(payload);
@@ -226,12 +229,12 @@ export default function App() {
   const handleRegister = async (payload) => {
     setAuthLoading(true);
     setGlobalError('');
+    setGlobalSuccess('');
 
     try {
-      const data = await api.register(payload);
-      persistSession(data.token, data.user);
-      setMe(data.user);
-      redirectToRoleRoute(data.user);
+      await api.register(payload);
+      setAuthMode('login');
+      setGlobalSuccess('Cadastro criado. Verifique seu e-mail e confirme o link para ativar a conta.');
     } catch (error) {
       setGlobalError(error.message);
     } finally {
@@ -384,6 +387,10 @@ export default function App() {
       return <BilhetesPage inbox={inbox} outbox={outbox} onRespond={handleRespondBilhete} />;
     }
 
+    if (activeTab === 'premium') {
+      return <PremiumPage />;
+    }
+
     if (activeTab === 'chats') {
       return (
         <ChatsPage
@@ -397,7 +404,7 @@ export default function App() {
       );
     }
 
-    return <ProfilePage me={me} onSave={handleSaveProfile} />;
+    return <ProfilePage me={me} onSave={handleSaveProfile} apiClient={api} premiumActive={Boolean(me?.premiumStatus)} />;
   }, [
     activeTab,
     chats,
@@ -438,7 +445,11 @@ export default function App() {
         onSocialLogin={handleSocialLogin}
         loading={authLoading}
         error={globalError}
-        onClearError={() => setGlobalError('')}
+        successMessage={globalSuccess}
+        onClearError={() => {
+          setGlobalError('');
+          setGlobalSuccess('');
+        }}
         initialMode={authMode}
       />
     );

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import Modal from './Modal';
+import AppNotice from './AppNotice';
 import { api } from '../api/client';
 
 export default function VenueAgendaModal({ isOpen, onClose, venueId, venueName }) {
@@ -69,13 +70,13 @@ export default function VenueAgendaModal({ isOpen, onClose, venueId, venueName }
   }
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={`Agenda - ${venueName || 'Local'}`}>
+    <Modal isOpen={isOpen} onClose={onClose} title={`Agenda da semana - ${venueName || 'Local'}`}>
       {loading ? (
         <p className="modal__loading">Carregando agenda...</p>
       ) : error ? (
-        <p className="modal__error">{error}</p>
+        <AppNotice message={error} type="error" closable={false} />
       ) : events.length === 0 ? (
-        <p className="modal__empty">Nenhum evento cadastrado</p>
+        <p className="modal__empty">Nenhum evento cadastrado nesta semana</p>
       ) : (
         <ul className="events-list">
           {events.map((event) => (

@@ -2,6 +2,7 @@ import { useMemo, useState, useEffect } from 'react';
 
 import ExplorePage from './ExplorePage';
 import Modal from '../components/Modal';
+import PageLoader from '../components/PageLoader';
 import RestaurantMenuPreview from '../components/RestaurantMenuPreview';
 import VenuePhotosModal from '../components/VenuePhotosModal';
 import VenueAgendaModal from '../components/VenueAgendaModal';
@@ -84,6 +85,31 @@ function getCategoryIcon(category) {
   return CATEGORY_ICONS[normalized] || null;
 }
 
+function formatDateToIsoLocal(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function getCurrentWeekRangeIso() {
+  const today = new Date();
+  const day = today.getDay();
+  const diffToMonday = day === 0 ? -6 : 1 - day;
+
+  const monday = new Date(today);
+  monday.setHours(0, 0, 0, 0);
+  monday.setDate(today.getDate() + diffToMonday);
+
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+
+  return {
+    start: formatDateToIsoLocal(monday),
+    end: formatDateToIsoLocal(sunday),
+  };
+}
+
 export default function HomePage({
   venues,
   radar,
@@ -107,17 +133,23 @@ export default function HomePage({
   const [venueDetailsCache, setVenueDetailsCache] = useState({});
   const [venueMenuCache, setVenueMenuCache] = useState({});
   const radarByVenueId = new Map(radar.map((item) => [item.id, item]));
+  const weekRange = getCurrentWeekRangeIso();
 
   // Load venue details (photos, agenda and menu) for all venues
   useEffect(() => {
     const loadVenueDetails = async (venueId) => {
       try {
         const response = await api.venueDetails(venueId);
+        const agendaEvents = Array.isArray(response.agendaEvents) ? response.agendaEvents : [];
+        const hasEventsThisWeek = agendaEvents.some((event) => {
+          const eventDate = String(event?.eventDate || '').slice(0, 10);
+          return eventDate && eventDate >= weekRange.start && eventDate <= weekRange.end;
+        });
         setVenueDetailsCache((prev) => ({
           ...prev,
           [venueId]: {
             hasPhotos: (response.galleryUrls || []).length > 0,
-            hasEvents: (response.agendaEvents || []).length > 0,
+            hasEvents: hasEventsThisWeek,
           },
         }));
       } catch {
@@ -153,7 +185,7 @@ export default function HomePage({
       loadVenueDetails(venue.id);
       loadVenueMenu(venue.id);
     });
-  }, [venues]);
+  }, [venues, weekRange.end, weekRange.start]);
   const filteredVenues = useMemo(() => {
     if (!premiumActive) {
       return venues;
@@ -174,14 +206,14 @@ export default function HomePage({
     <div className="page-stack">
       <section className="panel">
         <h3>Hotspots</h3>
-        {loadingVenues ? <p>Carregando locais...</p> : null}
+        {loadingVenues ? <PageLoader label="Carregando locais..." /> : null}
         {!loadingVenues && !locationEnabled ? (
           <p className="explore-notice">
             {locationBlockedMessage ||
               'Sem localizacao ativa, o Bilhete perde a magia dos encontros por perto. Ative a permissao para liberar uma experiencia completa.'}
           </p>
         ) : null}
-        {premiumActive && loadingRadar ? <p>Atualizando pessoas no local...</p> : null}
+        {premiumActive && loadingRadar ? <PageLoader size="sm" label="Atualizando pessoas no local..." /> : null}
         {premiumActive && locationEnabled ? (
           <label className="explore-filter">
             <input

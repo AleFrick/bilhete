@@ -73,12 +73,12 @@ export async function listAdminVenues(req, res) {
     const values = [];
 
     if (city) {
-      where.push('lower(venues.city) = lower(?)');
+      where.push('venues.city = ?');
       values.push(city);
     }
 
     if (category) {
-      where.push('lower(coalesce(venues.category, "")) = lower(?)');
+      where.push('coalesce(venues.category, "") = ?');
       values.push(category);
     }
 
@@ -111,7 +111,7 @@ export async function listAdminVenues(req, res) {
       from venues
       left join establishments on establishments.id = venues.establishment_id
       ${whereSql}
-      order by venues.created_at desc`
+      order by venues.id desc`
       ,
       values
     );

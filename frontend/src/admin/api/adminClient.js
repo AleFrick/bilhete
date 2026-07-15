@@ -199,4 +199,43 @@ export const adminApi = {
     request(`/establishment/menu/${itemId}`, { method: 'PUT', body: JSON.stringify(payload) }),
   deleteMenuItem: (itemId) =>
     request(`/establishment/menu/${itemId}`, { method: 'DELETE' }),
+  premiumCatalog: () => request('/premium/catalog'),
+  premiumCheckout: (payload) => request('/premium/checkout', { method: 'POST', body: JSON.stringify(payload) }),
+  premiumConfirmOrder: (orderId) => request(`/premium/orders/${orderId}/confirm`, { method: 'POST' }),
+  adminPremiumPackages: ({ targetGroup } = {}) => {
+    const params = new URLSearchParams();
+    if (targetGroup) {
+      params.set('targetGroup', targetGroup);
+    }
+    const query = params.toString();
+    return request(`/admin/premium/packages${query ? `?${query}` : ''}`);
+  },
+  createAdminPremiumPackage: (payload) =>
+    request('/admin/premium/packages', { method: 'POST', body: JSON.stringify(payload) }),
+  updateAdminPremiumPackage: (packageId, payload) =>
+    request(`/admin/premium/packages/${packageId}`, { method: 'PUT', body: JSON.stringify(payload) }),
+  adminPremiumCoupons: ({ targetGroup } = {}) => {
+    const params = new URLSearchParams();
+    if (targetGroup) {
+      params.set('targetGroup', targetGroup);
+    }
+    const query = params.toString();
+    return request(`/admin/premium/coupons${query ? `?${query}` : ''}`);
+  },
+  createAdminPremiumCoupon: (payload) =>
+    request('/admin/premium/coupons', { method: 'POST', body: JSON.stringify(payload) }),
+  updateAdminPremiumCoupon: (couponId, payload) =>
+    request(`/admin/premium/coupons/${couponId}`, { method: 'PUT', body: JSON.stringify(payload) }),
+  adminPremiumPromotions: ({ targetGroup } = {}) => {
+    const params = new URLSearchParams();
+    if (targetGroup) {
+      params.set('targetGroup', targetGroup);
+    }
+    const query = params.toString();
+    return request(`/admin/premium/promotions${query ? `?${query}` : ''}`);
+  },
+  createAdminPremiumPromotion: (payload) =>
+    request('/admin/premium/promotions', { method: 'POST', body: JSON.stringify(payload) }),
+  updateAdminPremiumPromotion: (promotionId, payload) =>
+    request(`/admin/premium/promotions/${promotionId}`, { method: 'PUT', body: JSON.stringify(payload) }),
 };

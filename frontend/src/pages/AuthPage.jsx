@@ -7,31 +7,92 @@ export default function AuthPage({
   onSocialLogin,
   loading,
   error,
+  successMessage,
   onClearError,
   initialMode = 'login',
 }) {
   const [mode, setMode] = useState(initialMode === 'register' ? 'register' : 'login');
-  const [form, setForm] = useState({ name: '', email: '', password: '' });
+  const [form, setForm] = useState({ name: '', email: '', password: '', confirmPassword: '' });
+  const [localError, setLocalError] = useState('');
   const googleEnabled = import.meta.env.VITE_AUTH_GOOGLE_ENABLED === 'true';
   const icloudEnabled = import.meta.env.VITE_AUTH_ICLOUD_ENABLED === 'true';
   const facebookEnabled = import.meta.env.VITE_AUTH_FACEBOOK_ENABLED === 'true';
   const hasSocialProviders = googleEnabled || icloudEnabled || facebookEnabled;
+  const minPasswordStrength = Number(import.meta.env.VITE_PASSWORD_MIN_STRENGTH || 2);
+
+  const computePasswordStrengthScore = (password) => {
+    const value = String(password || '');
+    let score = 0;
+
+    if (value.length >= 8) {
+      score += 1;
+    }
+    if (value.length >= 12) {
+      score += 1;
+    }
+    if (/[a-z]/.test(value) && /[A-Z]/.test(value)) {
+      score += 1;
+    }
+    if (/\d/.test(value) && /[^A-Za-z0-9]/.test(value)) {
+      score += 1;
+    }
+
+    return score;
+  };
+
+  const passwordStrength = computePasswordStrengthScore(form.password);
+  const progressTowardsGoal = minPasswordStrength > 0 ? passwordStrength / minPasswordStrength : 0;
+  const barWidthPercent =
+    passwordStrength >= minPasswordStrength ? 100 : Math.max(8, Math.min(100, progressTowardsGoal * 100));
+  const warningThreshold = Math.max(1, minPasswordStrength - 1);
+  const passwordStrengthColor =
+    passwordStrength >= minPasswordStrength
+      ? '#16a34a'
+      : passwordStrength >= warningThreshold
+        ? '#eab308'
+        : '#dc2626';
 
   useEffect(() => {
     const normalizedMode = initialMode === 'register' ? 'register' : 'login';
     setMode(normalizedMode);
-    setForm({ name: '', email: '', password: '' });
+    setForm({ name: '', email: '', password: '', confirmPassword: '' });
+    setLocalError('');
   }, [initialMode]);
+
+  useEffect(() => {
+    if (!successMessage) {
+      return;
+    }
+
+    setMode('login');
+    setForm({ name: '', email: '', password: '', confirmPassword: '' });
+    setLocalError('');
+  }, [successMessage]);
 
   const handleSubmit = (event) => {
     event.preventDefault();
+    setLocalError('');
 
     if (mode === 'login') {
       onLogin({ email: form.email, password: form.password });
       return;
     }
 
-    onRegister(form);
+    if (form.password !== form.confirmPassword) {
+      setLocalError('As senhas nao conferem.');
+      return;
+    }
+
+    if (passwordStrength < minPasswordStrength) {
+      setLocalError('Sua senha ainda nao atende os criterios de seguranca.');
+      return;
+    }
+
+    onRegister({
+      name: form.name,
+      email: form.email,
+      password: form.password,
+    });
   };
 
   const handleSocialClick = async (provider) => {
@@ -48,6 +109,15 @@ export default function AuthPage({
         <p className="hero__tag">Bilhete</p>
         <h1>{mode === 'login' ? 'Entrar' : 'Criar conta'}</h1>
         <p className="auth-subtitle">Conecte pessoas no mesmo lugar com seguranca e contexto.</p>
+        <AppNotice
+          message={localError || error}
+          type="error"
+          onClose={() => {
+            setLocalError('');
+            onClearError();
+          }}
+        />
+        <AppNotice message={!localError ? successMessage : ''} type="success" onClose={onClearError} />
 
         <form onSubmit={handleSubmit} className="auth-form" autoComplete="off">
           {mode === 'register' ? (
@@ -88,7 +158,51 @@ export default function AuthPage({
             />
           </label>
 
-          <AppNotice message={error} type="error" onClose={onClearError} />
+          {mode === 'register' ? (
+            <>
+              <div>
+                <label>
+                  Confirmar senha
+                  <input
+                    type="password"
+                    name="user_register_confirm_password"
+                    value={form.confirmPassword}
+                    onChange={(event) => setForm((prev) => ({ ...prev, confirmPassword: event.target.value }))}
+                    required
+                    minLength={6}
+                    autoComplete="new-password"
+                  />
+                </label>
+              </div>
+
+              <div>
+                <div
+                  role="progressbar"
+                  aria-valuemin={0}
+                  aria-valuemax={4}
+                  aria-valuenow={passwordStrength}
+                  aria-label="Forca da senha"
+                  style={{
+                    width: '100%',
+                    height: '8px',
+                    borderRadius: '999px',
+                    background: 'rgba(255,255,255,0.14)',
+                    overflow: 'hidden',
+                    marginTop: '4px',
+                  }}
+                >
+                  <div
+                    style={{
+                      width: `${barWidthPercent}%`,
+                      height: '100%',
+                      background: passwordStrengthColor,
+                      transition: 'width 180ms ease, background-color 180ms ease',
+                    }}
+                  />
+                </div>
+              </div>
+            </>
+          ) : null}
 
           <button type="submit" className="btn btn--primary" disabled={loading}>
             {loading ? 'Enviando...' : mode === 'login' ? 'Entrar' : 'Cadastrar'}
@@ -159,7 +273,8 @@ export default function AuthPage({
             className="text-link"
             onClick={() => {
               setMode((prev) => (prev === 'login' ? 'register' : 'login'));
-              setForm({ name: '', email: '', password: '' });
+              setForm({ name: '', email: '', password: '', confirmPassword: '' });
+              setLocalError('');
             }}
           >
             {mode === 'login' ? 'Nao tem conta? Criar agora' : 'Ja tem conta? Entrar'}

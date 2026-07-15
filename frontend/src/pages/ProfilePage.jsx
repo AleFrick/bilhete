@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
+import PremiumOrdersHistory from '../components/PremiumOrdersHistory';
+
 const INTENTIONS = [
   { value: 'conversar', label: 'Conversar' },
   { value: 'flertar', label: 'Flertar' },
@@ -61,7 +63,8 @@ function resizeDataUrlImage(dataUrl, maxSide = 1080, quality = 0.82) {
   });
 }
 
-export default function ProfilePage({ me, onSave }) {
+export default function ProfilePage({ me, onSave, apiClient, premiumActive }) {
+  const [profileTab, setProfileTab] = useState('profile'); // 'profile' | 'premium'
   const fileInputRef = useRef(null);
   const [form, setForm] = useState({
     name: me?.name || '',
@@ -239,10 +242,41 @@ export default function ProfilePage({ me, onSave }) {
     });
   };
 
+  const tabStyle = (key) => ({
+    padding: '8px 20px',
+    background: 'none',
+    border: 'none',
+    borderBottom: profileTab === key ? '2px solid var(--accent, #ff2d55)' : '2px solid transparent',
+    color: profileTab === key ? 'var(--text)' : 'var(--muted)',
+    cursor: 'pointer',
+    fontWeight: profileTab === key ? 600 : 400,
+    fontSize: '0.9rem',
+    marginBottom: '-1px',
+  });
+
   return (
     <section className="panel panel--profile-mobile">
-      <h3>Perfil</h3>
+      {/* Abas */}
+      <div style={{ display: 'flex', borderBottom: '1px solid var(--line)', marginBottom: '16px' }}>
+        <button type="button" style={tabStyle('profile')} onClick={() => setProfileTab('profile')}>
+          Perfil
+        </button>
+        <button type="button" style={tabStyle('premium')} onClick={() => setProfileTab('premium')}>
+          {premiumActive ? '✦ Premium' : 'Premium'}
+        </button>
+      </div>
 
+      {/* Aba Premium */}
+      {profileTab === 'premium' ? (
+        apiClient ? (
+          <PremiumOrdersHistory apiClient={apiClient} />
+        ) : (
+          <p style={{ opacity: 0.6 }}>Não disponível.</p>
+        )
+      ) : null}
+
+      {profileTab === 'profile' ? (
+      <>
       <form className="profile-form" onSubmit={handleSubmit}>
         <div className="profile-carousel" aria-label="Fotos do perfil">
           {form.photoUrls.map((photo, index) => (
@@ -399,6 +433,8 @@ export default function ProfilePage({ me, onSave }) {
             ) : null}
           </div>
         </div>
+      ) : null}
+      </>
       ) : null}
     </section>
   );

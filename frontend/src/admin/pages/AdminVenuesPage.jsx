@@ -3,6 +3,7 @@ import L from 'leaflet';
 import { MapContainer, Marker, TileLayer, useMap, useMapEvents } from 'react-leaflet';
 import { adminApi } from '../api/adminClient';
 import AppNotice from '../../components/AppNotice';
+import { formatStatusLabel } from '../utils/statusLabel';
 
 import 'leaflet/dist/leaflet.css';
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
@@ -98,8 +99,14 @@ export default function AdminVenuesPage({
   error,
 }) {
   const [feedback, setFeedback] = useState('');
+  const [feedbackType, setFeedbackType] = useState('success');
   const [loadingGeocode, setLoadingGeocode] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+
+  const showFeedback = (message, type = 'success') => {
+    setFeedback(message);
+    setFeedbackType(type);
+  };
 
   const [filterCity, setFilterCity] = useState('');
   const [filterText, setFilterText] = useState('');
@@ -123,7 +130,7 @@ export default function AdminVenuesPage({
 
   const runSearch = async () => {
     if (!filterCity) {
-      setFeedback('Selecione uma cidade para buscar os locais.');
+      showFeedback('Selecione uma cidade para buscar os locais.', 'error');
       return;
     }
 
@@ -139,17 +146,17 @@ export default function AdminVenuesPage({
     }));
 
     if (source === 'map') {
-      setFeedback('Posicao ajustada no mapa.');
+      showFeedback('Posicao ajustada no mapa.');
       return;
     }
 
-    setFeedback('Endereco localizado. Ajuste o marcador para maior precisao.');
+    showFeedback('Endereco localizado. Ajuste o marcador para maior precisao.');
   };
 
   const handleResolveAddress = async () => {
     const normalizedAddress = form.address.trim();
     if (!normalizedAddress) {
-      setFeedback('Informe um endereco para localizar no mapa.');
+      showFeedback('Informe um endereco para localizar no mapa.', 'error');
       return;
     }
 
@@ -159,13 +166,13 @@ export default function AdminVenuesPage({
     try {
       const coords = await geocodeAddress(`${normalizedAddress}, ${form.city || ''}`.trim());
       if (!coords) {
-        setFeedback('Nao encontrei esse endereco. Tente mais detalhes, como numero e cidade.');
+        showFeedback('Nao encontrei esse endereco. Tente mais detalhes, como numero e cidade.', 'error');
         return;
       }
 
       applyCoordinates(coords.lat, coords.lng, 'address');
     } catch (requestError) {
-      setFeedback(requestError.message || 'Falha ao localizar o endereco no mapa.');
+      showFeedback(requestError.message || 'Falha ao localizar o endereco no mapa.', 'error');
     } finally {
       setLoadingGeocode(false);
     }
@@ -190,7 +197,7 @@ export default function AdminVenuesPage({
       lat: Number.isFinite(Number(venue.lat)) ? Number(venue.lat).toFixed(7) : '',
       lng: Number.isFinite(Number(venue.lng)) ? Number(venue.lng).toFixed(7) : '',
     });
-    setFeedback('Modo edicao ativado.');
+    showFeedback('Modo edicao ativado.');
   };
 
   const closeOverlay = () => {
@@ -216,10 +223,10 @@ export default function AdminVenuesPage({
     try {
       if (editorMode === 'edit' && editingVenueId) {
         await onUpdateVenue(editingVenueId, payload);
-        setFeedback('Local atualizado com sucesso.');
+        showFeedback('Local atualizado com sucesso.');
       } else {
         await onCreateVenue(payload);
-        setFeedback('Local cadastrado com sucesso.');
+        showFeedback('Local cadastrado com sucesso.');
       }
 
       closeOverlay();
@@ -235,7 +242,7 @@ export default function AdminVenuesPage({
   const handleLinkApproval = async (venueId, status) => {
     try {
       await onUpdateVenueLinkApproval(venueId, status);
-      setFeedback(
+      showFeedback(
         status === 'approved' ? 'Vinculo aprovado com sucesso.' : 'Solicitacao de vinculo rejeitada.'
       );
     } catch (requestError) {
@@ -247,7 +254,7 @@ export default function AdminVenuesPage({
     <div className="admin-page-stack">
       <AppNotice
         message={feedback}
-        type="success"
+        type={feedbackType}
         floating
         autoHideMs={3600}
         onClose={() => setFeedback('')}
@@ -357,7 +364,7 @@ export default function AdminVenuesPage({
                     </>
                   ) : null}
                   {venue.establishmentLinkStatus && venue.establishmentLinkStatus !== 'none' ? (
-                    <span className="pill">{venue.establishmentLinkStatus}</span>
+                    <span className="pill">{formatStatusLabel(venue.establishmentLinkStatus)}</span>
                   ) : null}
                   <button type="button" className="btn btn--ghost" onClick={() => openEditOverlay(venue)}>
                     Editar

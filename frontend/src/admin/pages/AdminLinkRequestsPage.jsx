@@ -1,18 +1,6 @@
 import { useMemo, useState } from 'react';
 import AppNotice from '../../components/AppNotice';
-
-function formatStatus(status) {
-  if (status === 'pending') {
-    return 'Pendente';
-  }
-  if (status === 'approved') {
-    return 'Aprovado';
-  }
-  if (status === 'rejected') {
-    return 'Rejeitado';
-  }
-  return status || 'Desconhecido';
-}
+import { formatStatusLabel } from '../utils/statusLabel';
 
 function parseDocuments(value) {
   if (Array.isArray(value)) {
@@ -136,7 +124,7 @@ export default function AdminLinkRequestsPage({
                     <p>
                       <strong>Status:</strong>{' '}
                       <span className={`admin-link-status admin-link-status--${item.establishmentLinkStatus || 'unknown'}`}>
-                        {formatStatus(item.establishmentLinkStatus)}
+                        {formatStatusLabel(item.establishmentLinkStatus)}
                       </span>
                     </p>
                     {item.establishmentLinkRequestedAt ? (

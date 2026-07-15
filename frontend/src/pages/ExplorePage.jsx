@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { api } from '../api/client';
 import Modal from '../components/Modal';
+import PageLoader from '../components/PageLoader';
 import RestaurantMenuPreview from '../components/RestaurantMenuPreview';
 
 const BILHETE_PRESETS = [
@@ -270,13 +271,14 @@ export default function ExplorePage({
           {!locationEnabled ? (
             <p className="explore-notice">
               {locationBlockedMessage ||
-                'Sem localizacao ativa, o Bilhete perde a magia dos encontros por perto. Ative a permissao para liberar uma experiencia completa.'}
+                'Sem localização ativa, o Bilhete perde a magia dos encontros por perto. Ative a permissão para liberar uma experiência completa.'}
             </p>
           ) : loadingVenues ? (
-            <div className="explore-loader" role="status" aria-live="polite">
-              <span className="spinner" aria-hidden="true" />
-              <p>Carregando locais...</p>
-            </div>
+            <PageLoader label="Carregando locais..." />
+          ) : !venues.length ? (
+            <p className="explore-notice">
+              Nenhum local cadastrado próximo à sua localização. O Bilhete ainda está em expansão e novos locais são adicionados frequentemente. Tente novamente em outra localização ou mais tarde.
+            </p>
           ) : (
             <ul className="simple-list">
               {venues.map((venue) => (
@@ -388,10 +390,7 @@ export default function ExplorePage({
               {peopleNotice ? <p className="explore-notice">{peopleNotice}</p> : null}
 
               {loadingPeople ? (
-                <div className="explore-loader" role="status" aria-live="polite">
-                  <span className="spinner" aria-hidden="true" />
-                  <p>Carregando pessoas...</p>
-                </div>
+                <PageLoader label="Carregando pessoas..." />
               ) : null}
               {!loadingPeople && !filteredPeople.length ? <p>Nenhuma pessoa encontrada neste local.</p> : null}
 

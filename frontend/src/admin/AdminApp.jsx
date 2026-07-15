@@ -7,8 +7,10 @@ import EstablishmentAgendaPage from './pages/EstablishmentAgendaPage';
 import EstablishmentAgendaStatsPage from './pages/EstablishmentAgendaStatsPage';
 import EstablishmentMenuPage from './pages/EstablishmentMenuPage';
 import AdminLinkRequestsPage from './pages/AdminLinkRequestsPage';
+import AdminPremiumConfigPage from './pages/AdminPremiumConfigPage';
 import AdminSupportTicketsPage from './pages/AdminSupportTicketsPage';
 import AdminVenuesPage from './pages/AdminVenuesPage';
+import EstablishmentPremiumPage from './pages/EstablishmentPremiumPage';
 import EstablishmentSupportTicketsPage from './pages/EstablishmentSupportTicketsPage';
 import { clearAdminSession, loadAdminUser, persistAdminSession } from './state/adminSession';
 
@@ -50,7 +52,11 @@ export default function AdminApp() {
 
   useEffect(() => {
     if (isAdminUser) {
-      setActiveTab((prev) => (prev === 'venues' || prev === 'link-requests' || prev === 'support-tickets' ? prev : 'venues'));
+      setActiveTab((prev) =>
+        prev === 'venues' || prev === 'link-requests' || prev === 'support-tickets' || prev === 'premium-config'
+          ? prev
+          : 'venues'
+      );
       return;
     }
 
@@ -60,6 +66,9 @@ export default function AdminApp() {
           return prev;
         }
         if (prev === 'establishment-support') {
+          return prev;
+        }
+        if (prev === 'establishment-premium') {
           return prev;
         }
         if (prev === 'establishment-agenda' && establishmentHasApprovedLink) {
@@ -321,6 +330,15 @@ export default function AdminApp() {
                   </svg>
                 ),
               },
+              {
+                key: 'premium-config',
+                label: 'Premium',
+                icon: (
+                  <svg viewBox="0 0 24 24" focusable="false">
+                    <path d="M12 2 9.09 8.26 2 9.27l5 4.87L5.82 21 12 17.56 18.18 21 17 14.14l5-4.87-7.09-1.01z" />
+                  </svg>
+                ),
+              },
             ]
           : [
               {
@@ -380,6 +398,15 @@ export default function AdminApp() {
                   </svg>
                 ),
               },
+              {
+                key: 'establishment-premium',
+                label: 'Premium',
+                icon: (
+                  <svg viewBox="0 0 24 24" focusable="false">
+                    <path d="M12 2 9.09 8.26 2 9.27l5 4.87L5.82 21 12 17.56 18.18 21 17 14.14l5-4.87-7.09-1.01z" />
+                  </svg>
+                ),
+              },
             ]
       }
     >
@@ -412,10 +439,12 @@ export default function AdminApp() {
       ) : null}
 
       {isAdminUser && activeTab === 'support-tickets' ? <AdminSupportTicketsPage /> : null}
+      {isAdminUser && activeTab === 'premium-config' ? <AdminPremiumConfigPage /> : null}
 
       {isEstablishmentUser && activeTab === 'establishment-profile' ? <EstablishmentPanelPage /> : null}
 
       {isEstablishmentUser && activeTab === 'establishment-support' ? <EstablishmentSupportTicketsPage /> : null}
+      {isEstablishmentUser && activeTab === 'establishment-premium' ? <EstablishmentPremiumPage /> : null}
 
       {isEstablishmentUser && activeTab === 'establishment-agenda' ? (
         <EstablishmentAgendaPage hasApprovedLink={establishmentHasApprovedLink} />

@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { pool } from '../config/db.js';
 import { env } from '../config/env.js';
 import { signToken } from '../middleware/auth.js';
+import { sendRegistrationVerificationEmail } from '../services/emailService.js';
 
 const registerSchema = z.object({
   name: z.string().min(2),
@@ -20,6 +21,10 @@ const loginSchema = z.object({
 const socialLoginSchema = z.object({
   email: z.string().email(),
   name: z.string().min(2).max(120).optional(),
+});
+
+const verifyEmailQuerySchema = z.object({
+  token: z.string().min(40).max(200),
 });
 
 function resolveHashAlgorithm() {
@@ -43,6 +48,40 @@ function normalizeIncomingPassword(password) {
   return createHash(algorithm).update(`${value}:${env.passwordHashSecret}`).digest('hex');
 }
 
+function buildVerificationToken() {
+  return randomBytes(32).toString('hex');
+}
+
+function hashVerificationToken(token) {
+  return createHash('sha256').update(String(token || '')).digest('hex');
+}
+
+function computePasswordStrengthScore(password) {
+  const value = String(password || '');
+  let score = 0;
+
+  if (value.length >= 8) {
+    score += 1;
+  }
+  if (value.length >= 12) {
+    score += 1;
+  }
+  if (/[a-z]/.test(value) && /[A-Z]/.test(value)) {
+    score += 1;
+  }
+  if (/\d/.test(value) && /[^A-Za-z0-9]/.test(value)) {
+    score += 1;
+  }
+
+  return score;
+}
+
+function buildEmailVerificationLink(token) {
+  const url = new URL('/api/auth/verify-email', env.emailVerificationBaseUrl);
+  url.searchParams.set('token', token);
+  return url.toString();
+}
+
 export async function register(req, res) {
   const parsed = registerSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -50,30 +89,70 @@ export async function register(req, res) {
   }
 
   const { name, email, password } = parsed.data;
+  const normalizedEmail = String(email || '').trim().toLowerCase();
+  const passwordStrength = computePasswordStrengthScore(password);
+  if (passwordStrength < env.authPasswordMinStrength) {
+    return res.status(400).json({
+      message: `Senha fraca. Use pelo menos nivel ${env.authPasswordMinStrength} de forca.`,
+      minStrength: env.authPasswordMinStrength,
+      currentStrength: passwordStrength,
+    });
+  }
+
   const normalizedPassword = normalizeIncomingPassword(password);
+  const verificationToken = buildVerificationToken();
+  const verificationTokenHash = hashVerificationToken(verificationToken);
+  const verificationLink = buildEmailVerificationLink(verificationToken);
+  const verificationExpiresAt = new Date(Date.now() + env.emailVerificationTtlHours * 60 * 60 * 1000);
+  const connection = await pool.getConnection();
 
   try {
-    const [existing] = await pool.query('select id from users where email = ? limit 1', [email]);
+    await connection.beginTransaction();
+
+    const [existing] = await connection.query('select id from users where email = ? limit 1', [normalizedEmail]);
     if (existing.length) {
+      await connection.rollback();
       return res.status(409).json({ message: 'Email ja cadastrado.' });
     }
 
     const passwordHash = await bcrypt.hash(normalizedPassword, 10);
 
-    const [userInsert] = await pool.query(
-      'insert into users (name, email, password_hash) values (?, ?, ?)',
-      [name, email, passwordHash]
+    const [userInsert] = await connection.query(
+      `insert into users (
+        name,
+        email,
+        password_hash,
+        is_active,
+        email_verification_token_hash,
+        email_verification_expires_at
+      ) values (?, ?, ?, 0, ?, ?)`,
+      [name, normalizedEmail, passwordHash, verificationTokenHash, verificationExpiresAt]
     );
 
-    await pool.query(
+    await connection.query(
       'insert into profiles (user_id, name, status_social, premium_status) values (?, ?, ?, ?)',
       [userInsert.insertId, name, 'observando', 0]
     );
 
-    const token = signToken({ id: userInsert.insertId, email, premium_status: 0, role: 'user' });
-    return res.status(201).json({ token, user: { id: userInsert.insertId, name, email, role: 'user' } });
+    await sendRegistrationVerificationEmail({
+      to: normalizedEmail,
+      name,
+      verificationLink,
+    });
+
+    await connection.commit();
+
+    return res.status(201).json({
+      message: 'Cadastro criado. Confirme seu e-mail para ativar a conta.',
+    });
   } catch (error) {
+    try {
+      await connection.rollback();
+    } catch {}
+    console.error('[auth:register] failed', error?.stack || error?.message || String(error));
     return res.status(500).json({ message: 'Erro ao registrar usuario.' });
+  } finally {
+    connection.release();
   }
 }
 
@@ -93,10 +172,15 @@ export async function login(req, res) {
         u.name,
         u.email,
         u.role,
+        u.is_active as isActive,
         u.password_hash,
         case
-          when p.premium_status = 1 and (p.premium_expires_at is null or p.premium_expires_at > current_timestamp)
-            then 1
+          when exists (
+            select 1 from premium_subscriptions ps
+            where ps.user_id = u.id
+              and ps.status = 'active'
+              and ps.ends_at > current_timestamp
+          ) then 1
           else 0
         end as premiumStatus,
         p.premium_expires_at as premiumExpiresAt
@@ -110,6 +194,10 @@ export async function login(req, res) {
     const user = rows[0];
     if (!user) {
       return res.status(401).json({ message: 'Credenciais invalidas.' });
+    }
+
+    if (!user.isActive) {
+      return res.status(403).json({ message: 'Confirme seu e-mail antes de entrar.' });
     }
 
     const isBcryptHash = typeof user.password_hash === 'string' && user.password_hash.startsWith('$2');
@@ -149,6 +237,56 @@ export async function login(req, res) {
 
 export async function loginGoogle(req, res) {
   return loginWithSocialProvider(req, res, 'google');
+}
+
+export async function verifyRegistrationEmail(req, res) {
+  const parsed = verifyEmailQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    return res.status(400).send('Link de confirmacao invalido.');
+  }
+
+  const tokenHash = hashVerificationToken(parsed.data.token);
+
+  try {
+    const [rows] = await pool.query(
+      `select
+        id,
+        is_active as isActive,
+        email_verification_expires_at as verificationExpiresAt
+      from users
+      where email_verification_token_hash = ?
+      limit 1`,
+      [tokenHash]
+    );
+
+    const user = rows[0];
+    if (!user) {
+      return res.status(400).send('Token de confirmacao invalido ou expirado.');
+    }
+
+    const expiresAt = user.verificationExpiresAt ? new Date(user.verificationExpiresAt) : null;
+    if (!expiresAt || Number.isNaN(expiresAt.getTime()) || expiresAt.getTime() < Date.now()) {
+      return res.status(400).send('Token de confirmacao expirado.');
+    }
+
+    if (user.isActive) {
+      return res.status(200).send('Cadastro ja confirmado. Voce pode entrar normalmente.');
+    }
+
+    await pool.query(
+      `update users
+       set is_active = 1,
+           email_verified_at = current_timestamp,
+           email_verification_token_hash = null,
+           email_verification_expires_at = null
+       where id = ?`,
+      [user.id]
+    );
+
+    return res.status(200).send('Cadastro confirmado com sucesso. Voce ja pode entrar.');
+  } catch (error) {
+    return res.status(500).send('Erro ao confirmar cadastro.');
+  }
 }
 
 export async function loginApple(req, res) {
@@ -265,9 +403,14 @@ async function findOrCreateSocialUser({ provider, email, name }) {
       u.name,
       u.email,
       u.role,
+      u.is_active as isActive,
       case
-        when p.premium_status = 1 and (p.premium_expires_at is null or p.premium_expires_at > current_timestamp)
-          then 1
+        when exists (
+          select 1 from premium_subscriptions ps
+          where ps.user_id = u.id
+            and ps.status = 'active'
+            and ps.ends_at > current_timestamp
+        ) then 1
         else 0
       end as premiumStatus,
       p.premium_expires_at as premiumExpiresAt
@@ -300,6 +443,7 @@ async function findOrCreateSocialUser({ provider, email, name }) {
     name: normalizedName,
     email: normalizedEmail,
     role: 'user',
+    isActive: 1,
     premiumStatus: 0,
     premiumExpiresAt: null,
   };
@@ -363,6 +507,9 @@ export async function googleOAuthCallback(req, res) {
     }
 
     const user = await findOrCreateSocialUser({ provider: 'google', email: profile.email, name: profile.name });
+    if (!user.isActive) {
+      throw new Error('Confirme seu e-mail antes de entrar.');
+    }
     const authUser = toAuthPayload(user);
     const token = signToken(user);
     return res.redirect(buildFrontendRedirectUrl({ token, user: authUser }));
@@ -411,6 +558,9 @@ export async function facebookOAuthCallback(req, res) {
     }
 
     const user = await findOrCreateSocialUser({ provider: 'facebook', email: profile.email, name: profile.name });
+    if (!user.isActive) {
+      throw new Error('Confirme seu e-mail antes de entrar.');
+    }
     const authUser = toAuthPayload(user);
     const token = signToken(user);
     return res.redirect(buildFrontendRedirectUrl({ token, user: authUser }));
@@ -460,6 +610,9 @@ export async function appleOAuthCallback(req, res) {
     }
 
     const user = await findOrCreateSocialUser({ provider: 'icloud', email, name });
+    if (!user.isActive) {
+      throw new Error('Confirme seu e-mail antes de entrar.');
+    }
     const authUser = toAuthPayload(user);
     const token = signToken(user);
     return res.redirect(buildFrontendRedirectUrl({ token, user: authUser }));
@@ -480,6 +633,9 @@ async function loginWithSocialProvider(req, res, provider) {
       email: parsed.data.email,
       name: parsed.data.name,
     });
+    if (!user.isActive) {
+      return res.status(403).json({ message: 'Confirme seu e-mail antes de entrar.' });
+    }
     const authUser = toAuthPayload(user);
     const token = signToken(user);
     return res.json({

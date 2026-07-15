@@ -9,7 +9,12 @@ export function loadUser() {
   }
 
   try {
-    return JSON.parse(raw);
+    const user = JSON.parse(raw);
+    // Never trust stale premium status from cache — always wait for fresh API response
+    if (user) {
+      user.premiumStatus = false;
+    }
+    return user;
   } catch (error) {
     localStorage.removeItem(USER_KEY);
     return null;

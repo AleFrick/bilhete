@@ -23,8 +23,12 @@ export async function getMe(req, res) {
         p.photo_urls as photoUrls,
         p.status_social as statusSocial,
         case
-          when p.premium_status = 1 and (p.premium_expires_at is null or p.premium_expires_at > current_timestamp)
-            then 1
+          when exists (
+            select 1 from premium_subscriptions ps
+            where ps.user_id = u.id
+              and ps.status = 'active'
+              and ps.ends_at > current_timestamp
+          ) then 1
           else 0
         end as premiumStatus,
         p.premium_expires_at as premiumExpiresAt,
