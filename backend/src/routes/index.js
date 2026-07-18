@@ -1,8 +1,13 @@
 import { Router } from 'express';
+import multer from 'multer';
+import os from 'os';
+import path from 'path';
 
 import { loginAdmin } from '../controllers/adminAuthController.js';
 import { geocodeAdminAddress } from '../controllers/adminGeocodeController.js';
+import { importPbfVenues } from '../controllers/adminImportController.js';
 import {
+  batchCreateVenues,
   createAdminVenue,
   listAdminVenueLinkRequests,
   listAdminVenueCities,
@@ -72,6 +77,11 @@ import { getMe, updateMe } from '../controllers/profileController.js';
 import { getRadar, getVenueDetails, getVenueMenu, listPeopleInVenue, listVenues } from '../controllers/venueController.js';
 import { adminRequired, authRequired, establishmentRequired } from '../middleware/auth.js';
 
+const upload = multer({
+  dest: path.join(os.tmpdir(), 'bilhete-uploads'),
+  limits: { fileSize: 1024 * 1024 * 1024 },
+});
+
 const router = Router();
 
 router.get('/health', (req, res) => {
@@ -96,6 +106,7 @@ router.get('/admin/venues', authRequired, adminRequired, listAdminVenues);
 router.get('/admin/venues/cities', authRequired, adminRequired, listAdminVenueCities);
 router.get('/admin/venue-link-requests', authRequired, adminRequired, listAdminVenueLinkRequests);
 router.post('/admin/venues', authRequired, adminRequired, createAdminVenue);
+router.post('/admin/venues/batch', authRequired, adminRequired, batchCreateVenues);
 router.put('/admin/venues/:venueId', authRequired, adminRequired, updateAdminVenue);
 router.patch('/admin/venues/:venueId/link-approval', authRequired, adminRequired, updateAdminVenueLinkApproval);
 router.get('/admin/geocode', authRequired, adminRequired, geocodeAdminAddress);
@@ -112,6 +123,7 @@ router.put('/admin/premium/coupons/:couponId', authRequired, adminRequired, upda
 router.get('/admin/premium/promotions', authRequired, adminRequired, listAdminPremiumPromotions);
 router.post('/admin/premium/promotions', authRequired, adminRequired, createAdminPremiumPromotion);
 router.put('/admin/premium/promotions/:promotionId', authRequired, adminRequired, updateAdminPremiumPromotion);
+router.post('/admin/import/pbf', authRequired, adminRequired, upload.single('file'), importPbfVenues);
 
 router.get('/establishment/profile', authRequired, establishmentRequired, getEstablishmentProfile);
 router.put('/establishment/profile', authRequired, establishmentRequired, upsertEstablishmentProfile);

@@ -197,7 +197,6 @@ export default function AdminVenuesPage({
       lat: Number.isFinite(Number(venue.lat)) ? Number(venue.lat).toFixed(7) : '',
       lng: Number.isFinite(Number(venue.lng)) ? Number(venue.lng).toFixed(7) : '',
     });
-    showFeedback('Modo edicao ativado.');
   };
 
   const closeOverlay = () => {
@@ -207,7 +206,7 @@ export default function AdminVenuesPage({
   };
 
   const handleSubmit = async (event) => {
-    event.preventDefault();
+    if (event && event.preventDefault) event.preventDefault();
     setFeedback('');
 
     const payload = {
@@ -379,7 +378,7 @@ export default function AdminVenuesPage({
       {editorMode ? (
         <section className="admin-overlay" role="dialog" aria-modal="true">
           <div className="panel admin-overlay__content">
-            <header className="admin-overlay__header">
+            <header className="admin-overlay__header admin-overlay__header--sticky">
               <button
                 type="button"
                 className="btn btn--ghost"
@@ -393,23 +392,25 @@ export default function AdminVenuesPage({
             </header>
 
             <form className="admin-form" onSubmit={handleSubmit}>
-              <label>
-                Nome do local
-                <input
-                  value={form.name}
-                  onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
-                  required
-                />
-              </label>
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <label style={{ flex: 1 }}>
+                  Nome do local
+                  <input
+                    value={form.name}
+                    onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
+                    required
+                  />
+                </label>
 
-              <label>
-                Cidade
-                <input
-                  value={form.city}
-                  onChange={(event) => setForm((prev) => ({ ...prev, city: event.target.value }))}
-                  required
-                />
-              </label>
+                <label style={{ flex: 1 }}>
+                  Cidade
+                  <input
+                    value={form.city}
+                    onChange={(event) => setForm((prev) => ({ ...prev, city: event.target.value }))}
+                    required
+                  />
+                </label>
+              </div>
 
               <label>
                 Endereco
@@ -439,7 +440,6 @@ export default function AdminVenuesPage({
               </label>
 
               <div>
-                <p className="auth-subtitle">Categoria (selecione uma)</p>
                 <div className="badge-group admin-category-badges" role="radiogroup" aria-label="Categoria do local">
                   {CATEGORY_OPTIONS.map((option) => {
                     const active = form.category === option.value;
@@ -470,9 +470,6 @@ export default function AdminVenuesPage({
                 Local parceiro
               </label>
 
-              <button type="submit" className="btn btn--primary" disabled={loadingCreate || !hasCoordinates}>
-                {loadingCreate ? 'Salvando...' : editorMode === 'edit' ? 'Salvar alteracoes' : 'Cadastrar local'}
-              </button>
             </form>
 
             <section className="panel">
@@ -499,6 +496,15 @@ export default function AdminVenuesPage({
                 <MapCenterSync lat={latitude} lng={longitude} />
               </MapContainer>
             </section>
+
+            <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
+              <button type="button" className="btn btn--primary" onClick={handleSubmit} disabled={loadingCreate || !hasCoordinates}>
+                {loadingCreate ? 'Salvando...' : editorMode === 'edit' ? 'Salvar alteracoes' : 'Cadastrar local'}
+              </button>
+              <button type="button" className="btn btn--ghost" onClick={closeOverlay} disabled={loadingCreate}>
+                Cancelar
+              </button>
+            </div>
           </div>
         </section>
       ) : null}

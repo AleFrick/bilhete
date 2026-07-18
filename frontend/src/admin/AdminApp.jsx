@@ -9,6 +9,7 @@ import EstablishmentMenuPage from './pages/EstablishmentMenuPage';
 import AdminLinkRequestsPage from './pages/AdminLinkRequestsPage';
 import AdminPremiumConfigPage from './pages/AdminPremiumConfigPage';
 import AdminSupportTicketsPage from './pages/AdminSupportTicketsPage';
+import AdminImportPage from './pages/AdminImportPage';
 import AdminVenuesPage from './pages/AdminVenuesPage';
 import EstablishmentPremiumPage from './pages/EstablishmentPremiumPage';
 import EstablishmentSupportTicketsPage from './pages/EstablishmentSupportTicketsPage';
@@ -339,6 +340,15 @@ export default function AdminApp() {
                   </svg>
                 ),
               },
+              {
+                key: 'import-venues',
+                label: 'Importar Locais',
+                icon: (
+                  <svg viewBox="0 0 24 24" focusable="false">
+                    <path d="M9 16h6v-6h4l-7-7-7 7h4v6zm-4 2h14v2H5v-2z" />
+                  </svg>
+                ),
+              },
             ]
           : [
               {
@@ -440,6 +450,7 @@ export default function AdminApp() {
 
       {isAdminUser && activeTab === 'support-tickets' ? <AdminSupportTicketsPage /> : null}
       {isAdminUser && activeTab === 'premium-config' ? <AdminPremiumConfigPage /> : null}
+      {isAdminUser && activeTab === 'import-venues' ? <AdminImportPage /> : null}
 
       {isEstablishmentUser && activeTab === 'establishment-profile' ? <EstablishmentPanelPage /> : null}
 

@@ -85,6 +85,8 @@ export const adminApi = {
     return request(`/admin/venues${query ? `?${query}` : ''}`);
   },
   createVenue: (payload) => request('/admin/venues', { method: 'POST', body: JSON.stringify(payload) }),
+  batchCreateVenues: (venues) =>
+    request('/admin/venues/batch', { method: 'POST', body: JSON.stringify({ venues }) }),
   updateVenue: (venueId, payload) =>
     request(`/admin/venues/${venueId}`, { method: 'PUT', body: JSON.stringify(payload) }),
   updateVenueLinkApproval: (venueId, status) =>
@@ -238,4 +240,31 @@ export const adminApi = {
     request('/admin/premium/promotions', { method: 'POST', body: JSON.stringify(payload) }),
   updateAdminPremiumPromotion: (promotionId, payload) =>
     request(`/admin/premium/promotions/${promotionId}`, { method: 'PUT', body: JSON.stringify(payload) }),
+  importPbf: (file, city, bbox) => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const params = new URLSearchParams();
+    params.set('city', city);
+    if (bbox) {
+      params.set('bbox', bbox);
+    }
+
+    const token = getAdminToken();
+    return fetch(`${API_BASE_URL}/admin/import/pbf?${params.toString()}`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    }).then(async (response) => {
+      if (!response.ok) {
+        let message = 'Erro na requisicao';
+        try {
+          const data = await response.json();
+          message = data.message || message;
+        } catch {}
+        throw new Error(message);
+      }
+      return response.json();
+    });
+  },
 };

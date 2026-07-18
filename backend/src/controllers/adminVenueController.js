@@ -239,6 +239,116 @@ export async function createAdminVenue(req, res) {
   }
 }
 
+const batchVenueSchema = z.object({
+  venues: z.array(z.object({
+    name: z.string().trim().min(2).max(160),
+    city: z.string().trim().max(120).optional().or(z.literal('')),
+    address: z.string().trim().max(220).optional().or(z.literal('')),
+    lat: z.coerce.number().min(-90).max(90).optional(),
+    lng: z.coerce.number().min(-180).max(180).optional(),
+    category: z.string().trim().max(80).optional().or(z.literal('')),
+  })).min(1).max(5000),
+});
+
+export async function batchCreateVenues(req, res) {
+  const parsed = batchVenueSchema.safeParse(req.body);
+  if (!parsed.success) {
+    console.log('[batchImport] validation failed:', parsed.error?.issues);
+    return res.status(400).json({ message: 'Dados invalidos para importacao em lote.' });
+  }
+
+  const venues = parsed.data.venues;
+  console.log(`[batchImport] received ${venues.length} venues`);
+  console.log('[batchImport] first 3 venues:', JSON.stringify(venues.slice(0, 3)));
+
+  try {
+    let inserted = 0;
+    let updated = 0;
+    let skipped = 0;
+    const skipReasons = { noCoords: 0, insertError: 0, duplicate: 0 };
+
+    for (let i = 0; i < venues.length; i++) {
+      const v = venues[i];
+      if (!v.lat || !v.lng) {
+        skipped++;
+        skipReasons.noCoords++;
+        if (i < 5) console.log(`[batchImport] skip #${i}: no coords`, JSON.stringify({ name: v.name, lat: v.lat, lng: v.lng }));
+        continue;
+      }
+
+      const cityName = v.city || null;
+      try {
+        const [existing] = await pool.query(
+          `select id, name, city, address, lat, lng, category from venues where name = ? and (city = ? or (city is null and ? is null)) limit 1`,
+          [v.name, cityName, cityName]
+        );
+
+        if (existing.length > 0) {
+          const row = existing[0];
+          const updates = [];
+          const values = [];
+
+          if ((!row.address || row.address === '') && v.address) {
+            updates.push('address = ?');
+            values.push(v.address);
+          }
+          if (!row.lat && v.lat) {
+            updates.push('lat = ?');
+            values.push(v.lat);
+          }
+          if (!row.lng && v.lng) {
+            updates.push('lng = ?');
+            values.push(v.lng);
+          }
+          if ((!row.category || row.category === '') && v.category) {
+            updates.push('category = ?');
+            values.push(v.category);
+          }
+
+          if (updates.length > 0) {
+            values.push(row.id);
+            await pool.query(`update venues set ${updates.join(', ')} where id = ?`, values);
+            updated++;
+            if (i < 10) console.log(`[batchImport] update #${i}: id=${row.id}, fields=${updates.length}`, JSON.stringify({ name: v.name, city: cityName }));
+          } else {
+            skipped++;
+            skipReasons.duplicate++;
+            if (i < 10) console.log(`[batchImport] duplicate #${i}: id=${row.id}, no updates needed`, JSON.stringify({ name: v.name, city: cityName, existingCity: row.city }));
+          }
+          continue;
+        }
+
+        if (i < 10) console.log(`[batchImport] no duplicate found for`, JSON.stringify({ name: v.name, city: cityName }));
+        const [result] = await pool.query(
+          `insert into venues (name, city, address, lat, lng, partner_status, category)
+           values (?, ?, ?, ?, ?, 0, ?)`,
+          [
+            v.name,
+            cityName,
+            v.address || null,
+            v.lat,
+            v.lng,
+            v.category || null,
+          ]
+        );
+        inserted++;
+        if (i < 5) console.log(`[batchImport] insert #${i}: id=${result.insertId}`, JSON.stringify({ name: v.name, city: v.city, lat: v.lat, lng: v.lng }));
+      } catch (err) {
+        skipped++;
+        skipReasons.insertError++;
+        if (i < 5) console.log(`[batchImport] insert error #${i}:`, err?.message, JSON.stringify({ name: v.name }));
+      }
+    }
+
+    console.log(`[batchImport] done: inserted=${inserted}, updated=${updated}, skipped=${skipped} (noCoords=${skipReasons.noCoords}, duplicate=${skipReasons.duplicate}, insertError=${skipReasons.insertError}), total=${venues.length}`);
+
+    return res.status(201).json({ inserted, updated, skipped, total: venues.length });
+  } catch (error) {
+    console.error('[batchImport] fatal error:', error?.message, error?.stack);
+    return res.status(500).json({ message: 'Erro ao importar locais em lote.' });
+  }
+}
+
 export async function updateAdminVenue(req, res) {
   const parsedParams = venueParamSchema.safeParse(req.params);
   if (!parsedParams.success) {

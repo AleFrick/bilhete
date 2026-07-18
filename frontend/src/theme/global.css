@@ -1751,6 +1751,31 @@ textarea {
   flex-shrink: 0;
 }
 
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 16px;
+  font-size: 14px;
+}
+
+.admin-table th {
+  text-align: left;
+  padding: 8px 12px;
+  border-bottom: 2px solid var(--line);
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.admin-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.admin-table tr:hover td {
+  background: var(--surface-2);
+}
+
 .restaurant-menu-preview {
   border: 1px solid var(--line);
   border-radius: 18px;
@@ -3231,6 +3256,16 @@ textarea {
 
 .admin-overlay__header h2 {
   margin: 0;
+}
+
+.admin-overlay__header--sticky {
+  position: sticky;
+  top: -14px;
+  z-index: 10;
+  background: var(--bg-panel, #1a1a2e);
+  padding: 10px 14px;
+  margin: -14px -14px 12px;
+  border-bottom: 1px solid var(--border, #333);
 }
 
 /* Modal Generic */
