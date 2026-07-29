@@ -10,6 +10,7 @@ import AdminLinkRequestsPage from './pages/AdminLinkRequestsPage';
 import AdminPremiumConfigPage from './pages/AdminPremiumConfigPage';
 import AdminSupportTicketsPage from './pages/AdminSupportTicketsPage';
 import AdminImportPage from './pages/AdminImportPage';
+import AdminPaymentConfigPage from './pages/AdminPaymentConfigPage';
 import AdminVenuesPage from './pages/AdminVenuesPage';
 import EstablishmentPremiumPage from './pages/EstablishmentPremiumPage';
 import EstablishmentSupportTicketsPage from './pages/EstablishmentSupportTicketsPage';
@@ -54,7 +55,7 @@ export default function AdminApp() {
   useEffect(() => {
     if (isAdminUser) {
       setActiveTab((prev) =>
-        prev === 'venues' || prev === 'link-requests' || prev === 'support-tickets' || prev === 'premium-config'
+        prev === 'venues' || prev === 'link-requests' || prev === 'support-tickets' || prev === 'premium-config' || prev === 'payment-config' || prev === 'import-venues'
           ? prev
           : 'venues'
       );
@@ -349,6 +350,15 @@ export default function AdminApp() {
                   </svg>
                 ),
               },
+              {
+                key: 'payment-config',
+                label: 'Pagamentos',
+                icon: (
+                  <svg viewBox="0 0 24 24" focusable="false">
+                    <path d="M20 4H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z" />
+                  </svg>
+                ),
+              },
             ]
           : [
               {
@@ -451,6 +461,7 @@ export default function AdminApp() {
       {isAdminUser && activeTab === 'support-tickets' ? <AdminSupportTicketsPage /> : null}
       {isAdminUser && activeTab === 'premium-config' ? <AdminPremiumConfigPage /> : null}
       {isAdminUser && activeTab === 'import-venues' ? <AdminImportPage /> : null}
+      {isAdminUser && activeTab === 'payment-config' ? <AdminPaymentConfigPage /> : null}
 
       {isEstablishmentUser && activeTab === 'establishment-profile' ? <EstablishmentPanelPage /> : null}
 

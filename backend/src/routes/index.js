@@ -7,6 +7,11 @@ import { loginAdmin } from '../controllers/adminAuthController.js';
 import { geocodeAdminAddress } from '../controllers/adminGeocodeController.js';
 import { importPbfVenues } from '../controllers/adminImportController.js';
 import {
+  getPaymentSettings,
+  updatePaymentSettings,
+  asaasWebhook,
+} from '../controllers/adminPaymentController.js';
+import {
   batchCreateVenues,
   createAdminVenue,
   listAdminVenueLinkRequests,
@@ -124,6 +129,9 @@ router.get('/admin/premium/promotions', authRequired, adminRequired, listAdminPr
 router.post('/admin/premium/promotions', authRequired, adminRequired, createAdminPremiumPromotion);
 router.put('/admin/premium/promotions/:promotionId', authRequired, adminRequired, updateAdminPremiumPromotion);
 router.post('/admin/import/pbf', authRequired, adminRequired, upload.single('file'), importPbfVenues);
+router.get('/admin/payment/settings', authRequired, adminRequired, getPaymentSettings);
+router.put('/admin/payment/settings', authRequired, adminRequired, updatePaymentSettings);
+router.post('/webhooks/asaas', asaasWebhook);
 
 router.get('/establishment/profile', authRequired, establishmentRequired, getEstablishmentProfile);
 router.put('/establishment/profile', authRequired, establishmentRequired, upsertEstablishmentProfile);

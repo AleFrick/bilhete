@@ -267,4 +267,7 @@ export const adminApi = {
       return response.json();
     });
   },
+  getPaymentSettings: () => request('/admin/payment/settings'),
+  updatePaymentSettings: (payload) =>
+    request('/admin/payment/settings', { method: 'PUT', body: JSON.stringify(payload) }),
 };

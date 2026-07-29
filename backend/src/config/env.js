@@ -44,4 +44,9 @@ export const env = {
   appleClientId: process.env.APPLE_CLIENT_ID || '',
   appleClientSecret: process.env.APPLE_CLIENT_SECRET || '',
   appleRedirectUri: process.env.APPLE_REDIRECT_URI || 'http://localhost:3333/api/auth/apple/callback',
+  asaasApiKey: process.env.ASAAS_API_KEY || '',
+  asaasApiUrl: process.env.ASAAS_API_URL || 'https://api.asaas.com',
+  asaasWebhookToken: process.env.ASAAS_WEBHOOK_TOKEN || '',
+  asaasEnvironment: process.env.ASAAS_ENVIRONMENT || 'sandbox',
+  premiumStoreEnabled: (process.env.PREMIUM_STORE_ENABLED || 'false') === 'true',
 };

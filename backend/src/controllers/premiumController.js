@@ -2,12 +2,15 @@ import { randomBytes } from 'crypto';
 import { z } from 'zod';
 
 import { pool } from '../config/db.js';
+import { env } from '../config/env.js';
+import { createAsaasPayment, getPaymentSettings } from '../services/asaasService.js';
 
 const TARGET_GROUPS = ['user', 'establishment'];
 
 const checkoutSchema = z.object({
   packageId: z.coerce.number().int().positive(),
   couponCode: z.string().trim().max(40).optional(),
+  billingType: z.enum(['PIX', 'BOLETO', 'CREDIT_CARD', 'UNDEFINED']).optional(),
 });
 
 const orderParamSchema = z.object({
@@ -374,6 +377,9 @@ export async function listPremiumCatalog(req, res) {
   }
 
   try {
+    const settings = await getPaymentSettings();
+    const storeAvailable = (settings.enabled && Boolean(settings.apiKey)) || env.premiumStoreEnabled;
+
     await refreshPromotionStatus(pool, targetGroup);
     const activePromotion = await loadActivePromotion(pool, targetGroup);
 
@@ -408,12 +414,15 @@ export async function listPremiumCatalog(req, res) {
 
     return res.json({
       targetGroup,
+      storeAvailable,
+      paymentProvider: settings.enabled ? 'asaas' : (env.premiumStoreEnabled ? 'mock' : null),
       activePromotion,
       activeSubscription,
       packages: packageRows.map((row) => mapPackageRow(row)),
       orders,
     });
   } catch (error) {
+    console.error('[premiumCatalog] error:', error?.message);
     return res.status(500).json({ message: 'Erro ao carregar catalogo premium.' });
   }
 }
@@ -427,6 +436,14 @@ export async function createPremiumCheckout(req, res) {
   const parsed = checkoutSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ message: 'Dados invalidos para checkout premium.' });
+  }
+
+  const settings = await getPaymentSettings();
+  const asaasEnabled = settings.enabled && Boolean(settings.apiKey);
+  const storeAvailable = asaasEnabled || env.premiumStoreEnabled;
+
+  if (!storeAvailable) {
+    return res.status(403).json({ message: 'Vendas de pacotes premium temporariamente indisponiveis. Tente novamente mais tarde.' });
   }
 
   const connection = await pool.getConnection();
@@ -458,7 +475,30 @@ export async function createPremiumCheckout(req, res) {
     const discountCents = calculateDiscountCents(basePriceCents, coupon);
     const finalPriceCents = Math.max(0, basePriceCents - discountCents);
     const paymentReference = `PM-${Date.now()}-${randomBytes(4).toString('hex').toUpperCase()}`;
-    const paymentUrl = `https://checkout.mock.bilhete/premium/${paymentReference}`;
+
+    let paymentProvider = 'mock';
+    let paymentUrl = `https://checkout.mock.bilhete/premium/${paymentReference}`;
+    let asaasPaymentId = null;
+
+    if (asaasEnabled) {
+      const billingType = parsed.data.billingType || 'UNDEFINED';
+      try {
+        const asaasResult = await createAsaasPayment({
+          user: req.user,
+          packageTitle: selectedPackage.title,
+          finalPriceCents,
+          paymentReference,
+          billingType,
+        });
+        paymentProvider = 'asaas';
+        paymentUrl = asaasResult.checkoutUrl || asaasResult.invoiceUrl || paymentUrl;
+        asaasPaymentId = asaasResult.providerPaymentId;
+      } catch (asaasError) {
+        console.error('[premiumCheckout] asaas error:', asaasError?.message);
+        await connection.rollback();
+        return res.status(502).json({ message: asaasError?.message || 'Erro ao criar pagamento via Asaas.' });
+      }
+    }
 
     const [insertResult] = await connection.query(
       `insert into premium_orders (
@@ -474,7 +514,7 @@ export async function createPremiumCheckout(req, res) {
         payment_provider,
         payment_reference,
         payment_url
-      ) values (?, ?, ?, ?, ?, ?, ?, ?, 'pending', 'mock', ?, ?)`,
+      ) values (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)`,
       [
         req.user.id,
         targetGroup,
@@ -484,7 +524,8 @@ export async function createPremiumCheckout(req, res) {
         basePriceCents,
         discountCents,
         finalPriceCents,
-        paymentReference,
+        paymentProvider,
+        asaasPaymentId ? `${paymentReference}:${asaasPaymentId}` : paymentReference,
         paymentUrl,
       ]
     );

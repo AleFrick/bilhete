@@ -274,3 +274,25 @@ create index idx_establishment_support_ticket_messages_ticket_created
 create index idx_establishment_agenda_events_date on establishment_agenda_events(establishment_id, event_date, start_time);
 create index idx_bilhetes_to_user on bilhetes(to_user, created_at desc);
 create index idx_messages_chat on messages(chat_id, created_at);
+
+create table if not exists payment_settings (
+  id tinyint primary key default 1,
+  provider varchar(40) not null default 'asaas',
+  environment enum('sandbox', 'production') not null default 'sandbox',
+  api_key varchar(255),
+  api_url varchar(255),
+  webhook_token varchar(255),
+  enabled tinyint(1) not null default 0,
+  updated_at timestamp not null default current_timestamp on update current_timestamp,
+  constraint chk_payment_settings_single_row check (id = 1)
+);
+
+create table if not exists payment_customers (
+  id bigint primary key auto_increment,
+  user_id bigint not null,
+  provider varchar(40) not null default 'asaas',
+  provider_customer_id varchar(120) not null,
+  created_at timestamp not null default current_timestamp,
+  unique key uniq_payment_customers_user_provider (user_id, provider),
+  constraint fk_payment_customers_user foreign key (user_id) references users(id) on delete cascade
+);
