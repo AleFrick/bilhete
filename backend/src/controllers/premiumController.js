@@ -22,6 +22,8 @@ const packageCreateSchema = z.object({
   promotionId: z.coerce.number().int().positive().nullable().optional(),
   title: z.string().trim().min(2).max(140),
   description: z.string().trim().max(700).optional().or(z.literal('')),
+  benefits: z.array(z.string().trim().min(1).max(200)).max(30).optional(),
+  isFree: z.boolean().optional(),
   priceCents: z.coerce.number().int().min(0),
   durationDays: z.coerce.number().int().min(1).max(3650),
   displayOrder: z.coerce.number().int().min(0).optional(),
@@ -102,12 +104,23 @@ function normalizeDateTimeInput(value) {
 }
 
 function mapPackageRow(row) {
+  let benefits = [];
+  if (row.benefits) {
+    try {
+      benefits = typeof row.benefits === 'string' ? JSON.parse(row.benefits) : row.benefits;
+      if (!Array.isArray(benefits)) benefits = [];
+    } catch {
+      benefits = [];
+    }
+  }
   return {
     id: row.id,
     targetGroup: row.targetGroup,
     promotionId: row.promotionId,
     title: row.title,
     description: row.description,
+    benefits,
+    isFree: Boolean(row.isFree),
     priceCents: Number(row.priceCents || 0),
     durationDays: Number(row.durationDays || 0),
     displayOrder: Number(row.displayOrder || 0),
@@ -256,6 +269,8 @@ async function loadPackageForCheckout(connection, targetGroup, packageId, active
       promotion_id as promotionId,
       title,
       description,
+      benefits,
+      is_free as isFree,
       price_cents as priceCents,
       duration_days as durationDays,
       display_order as displayOrder,
@@ -395,6 +410,8 @@ export async function listPremiumCatalog(req, res) {
         promotion_id as promotionId,
         title,
         description,
+        benefits,
+        is_free as isFree,
         price_cents as priceCents,
         duration_days as durationDays,
         display_order as displayOrder,
@@ -405,7 +422,7 @@ export async function listPremiumCatalog(req, res) {
       where target_group = ?
         and active = 1
         ${promotionCondition}
-      order by display_order asc, id asc`,
+      order by is_free desc, display_order asc, id asc`,
       values
     );
 
@@ -460,6 +477,10 @@ export async function createPremiumCheckout(req, res) {
     if (!selectedPackage) {
       await connection.rollback();
       return res.status(404).json({ message: 'Pacote premium nao encontrado para este perfil.' });
+    }
+    if (selectedPackage.isFree) {
+      await connection.rollback();
+      return res.status(400).json({ message: 'Pacote gratuito nao permite checkout.' });
     }
 
     let coupon = null;
@@ -705,6 +726,8 @@ export async function listAdminPremiumPackages(req, res) {
         promotion_id as promotionId,
         title,
         description,
+        benefits,
+        is_free as isFree,
         price_cents as priceCents,
         duration_days as durationDays,
         display_order as displayOrder,
@@ -713,7 +736,7 @@ export async function listAdminPremiumPackages(req, res) {
         updated_at as updatedAt
       from premium_packages
       ${where.length ? `where ${where.join(' and ')}` : ''}
-      order by target_group asc, display_order asc, id asc`,
+      order by target_group asc, is_free desc, display_order asc, id asc`,
       values
     );
 
@@ -737,16 +760,20 @@ export async function createAdminPremiumPackage(req, res) {
         promotion_id,
         title,
         description,
+        benefits,
+        is_free,
         price_cents,
         duration_days,
         display_order,
         active
-      ) values (?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         payload.targetGroup,
         payload.promotionId || null,
         payload.title,
         payload.description || null,
+        payload.benefits ? JSON.stringify(payload.benefits) : null,
+        payload.isFree ? 1 : 0,
         payload.priceCents,
         payload.durationDays,
         payload.displayOrder || 0,
@@ -761,6 +788,8 @@ export async function createAdminPremiumPackage(req, res) {
         promotion_id as promotionId,
         title,
         description,
+        benefits,
+        is_free as isFree,
         price_cents as priceCents,
         duration_days as durationDays,
         display_order as displayOrder,
@@ -810,6 +839,14 @@ export async function updateAdminPremiumPackage(req, res) {
     updates.push('description = ?');
     values.push(payload.description || null);
   }
+  if (payload.benefits !== undefined) {
+    updates.push('benefits = ?');
+    values.push(payload.benefits ? JSON.stringify(payload.benefits) : null);
+  }
+  if (payload.isFree !== undefined) {
+    updates.push('is_free = ?');
+    values.push(payload.isFree ? 1 : 0);
+  }
   if (payload.priceCents !== undefined) {
     updates.push('price_cents = ?');
     values.push(payload.priceCents);
@@ -842,6 +879,8 @@ export async function updateAdminPremiumPackage(req, res) {
         promotion_id as promotionId,
         title,
         description,
+        benefits,
+        is_free as isFree,
         price_cents as priceCents,
         duration_days as durationDays,
         display_order as displayOrder,

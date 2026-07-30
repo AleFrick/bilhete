@@ -50,6 +50,8 @@ const makeEmptyPackageForm = (targetGroup) => ({
   targetGroup,
   title: '',
   description: '',
+  benefits: [''],
+  isFree: false,
   priceCents: '', // dígitos brutos em centavos (ex: "1990" = R$19,90)
   durationDays: '',
   displayOrder: '0',
@@ -165,8 +167,10 @@ export default function AdminPremiumConfigPage() {
         targetGroup: packageForm.targetGroup,
         title: packageForm.title,
         description: packageForm.description,
-        priceCents: Number(packageForm.priceCents || 0),
-        durationDays: Number(packageForm.durationDays),
+        benefits: packageForm.benefits.filter((b) => b.trim()),
+        isFree: Boolean(packageForm.isFree),
+        priceCents: packageForm.isFree ? 0 : Number(packageForm.priceCents || 0),
+        durationDays: packageForm.isFree ? 3650 : Number(packageForm.durationDays),
         displayOrder: Number(packageForm.displayOrder || 0),
         promotionId: packageForm.promotionId ? Number(packageForm.promotionId) : null,
         active: Boolean(packageForm.active),
@@ -387,10 +391,15 @@ export default function AdminPremiumConfigPage() {
                   <li key={item.id}>
                     <div>
                       <strong>{item.title}</strong>
+                      {item.isFree ? (
+                        <span style={{ marginLeft: '8px', fontSize: '0.72rem', fontWeight: 700, padding: '2px 8px', borderRadius: '999px', background: 'rgba(34,197,94,0.15)', color: '#22c55e' }}>
+                          GRATUITO
+                        </span>
+                      ) : null}
                       <p>{item.description || 'Sem descrição'}</p>
                       <p>
-                        Valor: {(item.priceCents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}{' '}
-                        | Duração: {item.durationDays} dia(s) | {item.active ? 'Ativo' : 'Inativo'}
+                        {item.isFree ? 'Grátis' : `Valor: ${(item.priceCents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`}
+                        {' | Duração: '}{item.durationDays} dia(s) | {item.active ? 'Ativo' : 'Inativo'}
                       </p>
                     </div>
                     <button
@@ -402,6 +411,8 @@ export default function AdminPremiumConfigPage() {
                           targetGroup: item.targetGroup || targetGroup,
                           title: item.title || '',
                           description: item.description || '',
+                          benefits: (item.benefits && item.benefits.length) ? item.benefits : [''],
+                          isFree: Boolean(item.isFree),
                           priceCents: String(item.priceCents || ''),
                           durationDays: String(item.durationDays || ''),
                           displayOrder: String(item.displayOrder || 0),
@@ -512,8 +523,9 @@ export default function AdminPremiumConfigPage() {
         isOpen={activeModal === MODAL_PROMOTION}
         onClose={closeModal}
         title={editingPromotionId ? 'Editar promoção' : 'Nova promoção'}
+        className="modal--wide"
       >
-        <div style={{ minWidth: 'min(580px, 90vw)' }}>
+        <div style={{ minWidth: 'min(620px, 90vw)' }}>
           <AppNotice message={modalError} type="error" onClose={() => setModalError('')} />
           <form className="admin-form" onSubmit={handleSavePromotion}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 16px' }}>
@@ -572,8 +584,9 @@ export default function AdminPremiumConfigPage() {
         isOpen={activeModal === MODAL_PACKAGE}
         onClose={closeModal}
         title={editingPackageId ? 'Editar pacote' : 'Novo pacote'}
+        className="modal--wide"
       >
-        <div style={{ minWidth: 'min(620px, 90vw)' }}>
+        <div style={{ minWidth: 'min(720px, 90vw)' }}>
           <AppNotice message={modalError} type="error" onClose={() => setModalError('')} />
           <form className="admin-form" onSubmit={handleSavePackage}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 16px' }}>
@@ -620,6 +633,44 @@ export default function AdminPremiumConfigPage() {
                   rows={2}
                 />
               </label>
+              <label style={{ gridColumn: '1 / -1' }}>
+                Benefícios (um por linha)
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {packageForm.benefits.map((benefit, index) => (
+                    <div key={index} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <input
+                        value={benefit}
+                        onChange={(event) => {
+                          const newBenefits = [...packageForm.benefits];
+                          newBenefits[index] = event.target.value;
+                          setPackageForm((prev) => ({ ...prev, benefits: newBenefits }));
+                        }}
+                        placeholder="Ex: Perfil destacado nas buscas"
+                      />
+                      {packageForm.benefits.length > 1 ? (
+                        <button
+                          type="button"
+                          className="btn btn--ghost btn--xs"
+                          onClick={() => {
+                            const newBenefits = packageForm.benefits.filter((_, i) => i !== index);
+                            setPackageForm((prev) => ({ ...prev, benefits: newBenefits.length ? newBenefits : [''] }));
+                          }}
+                        >
+                          ✕
+                        </button>
+                      ) : null}
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    className="btn btn--ghost btn--xs"
+                    style={{ alignSelf: 'flex-start' }}
+                    onClick={() => setPackageForm((prev) => ({ ...prev, benefits: [...prev.benefits, ''] }))}
+                  >
+                    + Adicionar benefício
+                  </button>
+                </div>
+              </label>
               <label>
                 Preço (R$)
                 <input
@@ -631,7 +682,8 @@ export default function AdminPremiumConfigPage() {
                     const digits = event.target.value.replace(/\D/g, '');
                     setPackageForm((prev) => ({ ...prev, priceCents: digits }));
                   }}
-                  required
+                  required={!packageForm.isFree}
+                  disabled={packageForm.isFree}
                 />
               </label>
               <label>
@@ -641,7 +693,8 @@ export default function AdminPremiumConfigPage() {
                   min="1"
                   value={packageForm.durationDays}
                   onChange={(event) => setPackageForm((prev) => ({ ...prev, durationDays: event.target.value }))}
-                  required
+                  required={!packageForm.isFree}
+                  disabled={packageForm.isFree}
                 />
               </label>
               <label>
@@ -661,6 +714,14 @@ export default function AdminPremiumConfigPage() {
                 />
                 Pacote ativo
               </label>
+              <label className="admin-checkbox" style={{ alignSelf: 'end', paddingBottom: '8px' }}>
+                <input
+                  type="checkbox"
+                  checked={packageForm.isFree}
+                  onChange={(event) => setPackageForm((prev) => ({ ...prev, isFree: event.target.checked }))}
+                />
+                Plano gratuito (padrão)
+              </label>
             </div>
             <div className="inline-row" style={{ marginTop: '16px' }}>
               <button type="submit" className="btn btn--primary" disabled={saving}>
@@ -679,8 +740,9 @@ export default function AdminPremiumConfigPage() {
         isOpen={activeModal === MODAL_COUPON}
         onClose={closeModal}
         title={editingCouponId ? 'Editar cupom' : 'Novo cupom'}
+        className="modal--wide"
       >
-        <div style={{ minWidth: 'min(620px, 90vw)' }}>
+        <div style={{ minWidth: 'min(720px, 90vw)' }}>
           <AppNotice message={modalError} type="error" onClose={() => setModalError('')} />
           <form className="admin-form" onSubmit={handleSaveCoupon}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 16px' }}>

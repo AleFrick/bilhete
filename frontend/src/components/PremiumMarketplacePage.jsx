@@ -21,6 +21,20 @@ const PAYMENT_METHODS = [
   { value: 'CREDIT_CARD', label: 'Cartão de Crédito', icon: '💳', description: 'Parcelamento disponível' },
 ];
 
+const badgeStyle = {
+  position: 'absolute',
+  top: 0,
+  left: 0,
+  right: 0,
+  background: 'var(--accent, #e0264c)',
+  color: '#fff',
+  fontSize: '0.72rem',
+  fontWeight: 700,
+  padding: '6px 12px',
+  textAlign: 'center',
+  letterSpacing: '0.04em',
+};
+
 export default function PremiumMarketplacePage({ apiClient }) {
   const [step, setStep] = useState('catalog'); // 'catalog' | 'checkout'
   const [loading, setLoading] = useState(false);
@@ -37,11 +51,15 @@ export default function PremiumMarketplacePage({ apiClient }) {
   const storeAvailable = catalog?.storeAvailable ?? false;
   const paymentProvider = catalog?.paymentProvider ?? null;
 
-  /* packageId do plano atual — usa o pedido pago mais recente */
+  /* packageId do plano atual — usa o pedido pago mais recente, ou o plano free se não houver assinatura */
   const currentPackageId = useMemo(() => {
-    if (!catalog?.activeSubscription) return null;
-    const paidOrder = catalog?.orders?.find((o) => o.status === 'paid');
-    return paidOrder?.packageId ?? null;
+    if (catalog?.activeSubscription) {
+      const paidOrder = catalog?.orders?.find((o) => o.status === 'paid');
+      return paidOrder?.packageId ?? null;
+    }
+    // Sem assinatura ativa: encontra o plano free
+    const freePkg = catalog?.packages?.find((p) => p.isFree);
+    return freePkg?.id ?? null;
   }, [catalog]);
 
   const loadCatalog = async () => {
@@ -137,7 +155,7 @@ export default function PremiumMarketplacePage({ apiClient }) {
             <span>
               <strong>Duração:</strong> {selectedPackage.durationDays} dia(s)
             </span>
-            <span style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--color-primary, #7c3aed)' }}>
+            <span style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--color-primary, #e0264c)' }}>
               {formatMoney(selectedPackage.priceCents)}
             </span>
           </div>
@@ -170,11 +188,11 @@ export default function PremiumMarketplacePage({ apiClient }) {
                     borderRadius: '10px',
                     border:
                       billingType === method.value
-                        ? '2px solid var(--color-primary, #7c3aed)'
+                        ? '2px solid var(--color-primary, #e0264c)'
                         : '1px solid var(--color-border, rgba(255,255,255,0.12))',
                     background:
                       billingType === method.value
-                        ? 'rgba(124,58,237,0.08)'
+                        ? 'rgba(255,45,85,0.08)'
                         : 'var(--color-surface-raised, rgba(255,255,255,0.04))',
                     cursor: checkoutLoading ? 'not-allowed' : 'pointer',
                     textAlign: 'left',
@@ -261,8 +279,8 @@ export default function PremiumMarketplacePage({ apiClient }) {
               style={{
                 padding: '8px 12px',
                 borderRadius: '8px',
-                background: 'rgba(124,58,237,0.12)',
-                border: '1px solid rgba(124,58,237,0.3)',
+                background: 'rgba(255,45,85,0.12)',
+                border: '1px solid rgba(255,45,85,0.3)',
                 marginBottom: catalog.activeSubscription ? '8px' : 0,
               }}
             >
@@ -278,7 +296,7 @@ export default function PremiumMarketplacePage({ apiClient }) {
         </section>
       ) : null}
 
-      {/* Grid de pacotes */}
+      {/* Grid de pacotes — comparação lado a lado */}
       <section className="panel">
         {loading ? <PageLoader label="Carregando pacotes..." /> : null}
 
@@ -290,93 +308,149 @@ export default function PremiumMarketplacePage({ apiClient }) {
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
-              gap: '16px',
+              gridTemplateColumns: catalog.packages.length >= 3
+                ? 'repeat(auto-fit, minmax(180px, 1fr))'
+                : `repeat(${catalog.packages.length}, minmax(180px, 1fr))`,
+              gap: '10px',
               marginTop: '8px',
+              alignItems: 'stretch',
             }}
           >
-            {catalog.packages.map((pkg) => {
+            {catalog.packages.map((pkg, index) => {
               const isCurrent = currentPackageId === pkg.id;
+              const isRecommended = index === 1 && catalog.packages.length >= 3;
+              const benefits = pkg.benefits && Array.isArray(pkg.benefits) ? pkg.benefits : [];
+
               return (
                 <div
                   key={pkg.id}
                   style={{
                     display: 'flex',
                     flexDirection: 'column',
-                    justifyContent: 'space-between',
-                    padding: '20px',
                     borderRadius: '12px',
                     border: isCurrent
-                      ? '2px solid var(--color-primary, #7c3aed)'
-                      : '1px solid var(--color-border, rgba(255,255,255,0.12))',
-                    background: 'var(--color-surface-raised, rgba(255,255,255,0.04))',
+                      ? '2px solid var(--color-primary, #e0264c)'
+                      : isRecommended
+                        ? '2px solid var(--color-primary, #e0264c)'
+                        : '1px solid var(--color-border, rgba(255,255,255,0.12))',
+                    background: isRecommended
+                      ? 'linear-gradient(180deg, rgba(255,45,85,0.06) 0%, var(--color-surface-raised, rgba(255,255,255,0.04)) 100%)'
+                      : 'var(--color-surface-raised, rgba(255,255,255,0.04))',
                     position: 'relative',
-                    minHeight: '180px',
+                    overflow: 'hidden',
                     opacity: storeAvailable ? 1 : 0.5,
                   }}
                 >
-                  {/* Badge plano atual */}
+                  {/* Badge */}
                   {isCurrent ? (
-                    <span
-                      style={{
-                        position: 'absolute',
-                        top: '-12px',
-                        left: '50%',
-                        transform: 'translateX(-50%)',
-                        background: 'var(--color-primary, #7c3aed)',
-                        color: '#fff',
-                        fontSize: '0.72rem',
-                        fontWeight: 700,
-                        padding: '3px 12px',
-                        borderRadius: '999px',
-                        whiteSpace: 'nowrap',
-                        letterSpacing: '0.04em',
-                      }}
-                    >
-                      PLANO ATUAL
+                    <span style={badgeStyle}>PLANO ATUAL</span>
+                  ) : isRecommended ? (
+                    <span style={{ ...badgeStyle, background: 'linear-gradient(90deg, #e0264c, #ff6b8a)' }}>
+                      RECOMENDADO
                     </span>
                   ) : null}
 
-                  <div>
-                    <p style={{ margin: '0 0 6px', fontWeight: 700, fontSize: '1.05rem' }}>
+                  {/* Header do card */}
+                  <div style={{ padding: `${isCurrent || isRecommended ? '28px' : '16px'} 16px 12px`, textAlign: 'center' }}>
+                    <p style={{ margin: '0 0 6px', fontWeight: 800, fontSize: '1.05rem' }}>
                       {pkg.title}
                     </p>
                     {pkg.description ? (
-                      <p
-                        style={{
-                          margin: '0 0 12px',
-                          fontSize: '0.88rem',
-                          opacity: 0.75,
-                          lineHeight: 1.45,
-                        }}
-                      >
+                      <p style={{ margin: '0 0 10px', fontSize: '0.82rem', opacity: 0.65, lineHeight: 1.35 }}>
                         {pkg.description}
                       </p>
                     ) : null}
-                    <p style={{ margin: '0 0 4px', fontSize: '0.85rem', opacity: 0.65 }}>
-                      {pkg.durationDays} dia(s)
-                    </p>
                     <p
                       style={{
                         margin: 0,
-                        fontSize: '1.4rem',
-                        fontWeight: 800,
-                        color: 'var(--color-primary, #7c3aed)',
+                        fontSize: '1.6rem',
+                        fontWeight: 900,
+                        color: 'var(--color-primary, #e0264c)',
+                        lineHeight: 1,
                       }}
                     >
-                      {formatMoney(pkg.priceCents)}
+                      {pkg.isFree ? 'Grátis' : formatMoney(pkg.priceCents)}
+                    </p>
+                    <p style={{ margin: '3px 0 0', fontSize: '0.76rem', opacity: 0.5 }}>
+                      {pkg.isFree ? 'para usuários cadastrados' : `${pkg.durationDays} dia(s) de acesso`}
                     </p>
                   </div>
 
-                  <button
-                    type="button"
-                    className={isCurrent ? 'btn btn--ghost' : 'btn btn--primary'}
-                    style={{ marginTop: '16px', width: '100%' }}
-                    onClick={() => handleSelectPackage(pkg)}
-                    disabled={!storeAvailable}
-                  >
-                    {isCurrent ? 'Renovar' : 'Escolher'}
-                  </button>
+                  {/* Lista de benefícios */}
+                  <div style={{ padding: '0 16px 12px', flex: 1 }}>
+                    {benefits.length > 0 ? (
+                      <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {benefits.map((benefit, i) => (
+                          <li
+                            key={i}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'flex-start',
+                              gap: '7px',
+                              fontSize: '0.84rem',
+                              lineHeight: 1.35,
+                            }}
+                          >
+                            <span
+                              style={{
+                                flexShrink: 0,
+                                width: '18px',
+                                height: '18px',
+                                borderRadius: '50%',
+                                background: 'rgba(255,45,85,0.15)',
+                                color: 'var(--color-primary, #e0264c)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: '0.65rem',
+                                fontWeight: 700,
+                                marginTop: '1px',
+                              }}
+                            >
+                              ✓
+                            </span>
+                            <span>{benefit}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p style={{ fontSize: '0.8rem', opacity: 0.4, textAlign: 'center', padding: '10px 0' }}>
+                        Sem benefícios cadastrados
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Botão */}
+                  <div style={{ padding: '0 16px 16px' }}>
+                    {pkg.isFree ? (
+                      <div
+                        style={{
+                          width: '100%',
+                          padding: '10px',
+                          textAlign: 'center',
+                          borderRadius: '6px',
+                          background: isCurrent ? 'rgba(255,45,85,0.12)' : 'transparent',
+                          border: isCurrent ? '1px solid rgba(255,45,85,0.3)' : '1px solid var(--color-border, rgba(255,255,255,0.12))',
+                          fontSize: '0.85rem',
+                          fontWeight: 600,
+                          color: isCurrent ? 'var(--color-primary, #e0264c)' : 'inherit',
+                          opacity: 0.7,
+                        }}
+                      >
+                        {isCurrent ? 'Seu plano atual' : 'Plano padrão'}
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        className={isCurrent ? 'btn btn--ghost' : 'btn btn--primary'}
+                        style={{ width: '100%', padding: '10px', fontSize: '0.9rem' }}
+                        onClick={() => handleSelectPackage(pkg)}
+                        disabled={!storeAvailable}
+                      >
+                        {isCurrent ? 'Renovar plano' : 'Escolher plano'}
+                      </button>
+                    )}
+                  </div>
                 </div>
               );
             })}

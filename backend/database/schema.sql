@@ -51,6 +51,8 @@ create table if not exists premium_packages (
   promotion_id bigint null,
   title varchar(140) not null,
   description text,
+  benefits json null,
+  is_free tinyint(1) not null default 0,
   price_cents int not null,
   duration_days int not null,
   display_order int not null default 0,

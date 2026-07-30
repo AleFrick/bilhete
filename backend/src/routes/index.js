@@ -26,6 +26,7 @@ import {
   deleteEstablishmentAgendaEvent,
   deleteEstablishmentMenuItem,
   getEstablishmentAgendaStats,
+  getEstablishmentDashboard,
   getEstablishmentProfile,
   listEstablishmentAgenda,
   listEstablishmentMenuItems,
@@ -144,6 +145,7 @@ router.post('/establishment/agenda', authRequired, establishmentRequired, create
 router.put('/establishment/agenda/:eventId', authRequired, establishmentRequired, updateEstablishmentAgendaEvent);
 router.delete('/establishment/agenda/:eventId', authRequired, establishmentRequired, deleteEstablishmentAgendaEvent);
 router.get('/establishment/agenda/stats', authRequired, establishmentRequired, getEstablishmentAgendaStats);
+router.get('/establishment/dashboard', authRequired, establishmentRequired, getEstablishmentDashboard);
 router.get('/establishment/menu', authRequired, establishmentRequired, listEstablishmentMenuItems);
 router.post('/establishment/menu', authRequired, establishmentRequired, createEstablishmentMenuItem);
 router.put('/establishment/menu/:itemId', authRequired, establishmentRequired, updateEstablishmentMenuItem);

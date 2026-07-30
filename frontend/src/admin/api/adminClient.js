@@ -150,6 +150,12 @@ export const adminApi = {
 
     return request(`/establishment/agenda/stats?${params.toString()}`);
   },
+  establishmentDashboard: ({ startDate, endDate }) => {
+    const params = new URLSearchParams();
+    params.set('startDate', startDate);
+    params.set('endDate', endDate);
+    return request(`/establishment/dashboard?${params.toString()}`);
+  },
   establishmentGeocode: (query) =>
     request(`/establishment/geocode?q=${encodeURIComponent(query)}&nocache=${Date.now()}`, {
       cache: 'no-store',

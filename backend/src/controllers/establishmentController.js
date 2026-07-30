@@ -301,6 +301,20 @@ async function hasApprovedVenueLink(establishmentId) {
   return Boolean(rows[0]);
 }
 
+async function hasActivePremium(userId) {
+  const [rows] = await pool.query(
+    `select 1
+     from premium_subscriptions
+     where user_id = ?
+       and target_group = 'establishment'
+       and status = 'active'
+       and ends_at > current_timestamp
+     limit 1`,
+    [userId]
+  );
+  return Boolean(rows[0]);
+}
+
 async function loadEstablishmentAgendaEvent(establishmentId, eventId) {
   const [rows] = await pool.query(
     `select
@@ -354,6 +368,14 @@ async function loadEstablishmentMenuItem(establishmentId, itemId) {
 export async function listEstablishmentMenuItems(req, res) {
   try {
     const establishmentId = await ensureEstablishmentRecord(req.user.id);
+    const approved = await hasApprovedVenueLink(establishmentId);
+    if (!approved) {
+      return res.status(403).json({ message: 'Cardápio disponível apenas para estabelecimento com vinculação aprovada.' });
+    }
+    const isPremium = await hasActivePremium(req.user.id);
+    if (!isPremium) {
+      return res.status(403).json({ message: 'Cardápio disponível apenas para estabelecimentos premium.' });
+    }
 
     const [rows] = await pool.query(
       `select
@@ -386,6 +408,14 @@ export async function createEstablishmentMenuItem(req, res) {
 
   try {
     const establishmentId = await ensureEstablishmentRecord(req.user.id);
+    const approved = await hasApprovedVenueLink(establishmentId);
+    if (!approved) {
+      return res.status(403).json({ message: 'Cardápio disponível apenas para estabelecimento com vinculação aprovada.' });
+    }
+    const isPremium = await hasActivePremium(req.user.id);
+    if (!isPremium) {
+      return res.status(403).json({ message: 'Cardápio disponível apenas para estabelecimentos premium.' });
+    }
     const payload = parsed.data;
     const normalizedPrice = normalizeMenuItemPrice(payload.price);
 
@@ -428,6 +458,14 @@ export async function updateEstablishmentMenuItem(req, res) {
 
   try {
     const establishmentId = await ensureEstablishmentRecord(req.user.id);
+    const approved = await hasApprovedVenueLink(establishmentId);
+    if (!approved) {
+      return res.status(403).json({ message: 'Cardápio disponível apenas para estabelecimento com vinculação aprovada.' });
+    }
+    const isPremium = await hasActivePremium(req.user.id);
+    if (!isPremium) {
+      return res.status(403).json({ message: 'Cardápio disponível apenas para estabelecimentos premium.' });
+    }
     const existing = await loadEstablishmentMenuItem(establishmentId, parsedParams.data.itemId);
     if (!existing) {
       return res.status(404).json({ message: 'Item do cardápio não encontrado.' });
@@ -471,6 +509,14 @@ export async function deleteEstablishmentMenuItem(req, res) {
 
   try {
     const establishmentId = await ensureEstablishmentRecord(req.user.id);
+    const approved = await hasApprovedVenueLink(establishmentId);
+    if (!approved) {
+      return res.status(403).json({ message: 'Cardápio disponível apenas para estabelecimento com vinculação aprovada.' });
+    }
+    const isPremium = await hasActivePremium(req.user.id);
+    if (!isPremium) {
+      return res.status(403).json({ message: 'Cardápio disponível apenas para estabelecimentos premium.' });
+    }
     const existing = await loadEstablishmentMenuItem(establishmentId, parsedParams.data.itemId);
     if (!existing) {
       return res.status(404).json({ message: 'Item do cardápio não encontrado.' });
@@ -774,6 +820,10 @@ export async function listEstablishmentAgenda(req, res) {
     if (!approved) {
       return res.status(403).json({ message: 'Agenda disponivel apenas para estabelecimento com vinculacao aprovada.' });
     }
+    const isPremium = await hasActivePremium(req.user.id);
+    if (!isPremium) {
+      return res.status(403).json({ message: 'Agenda disponivel apenas para estabelecimentos premium.' });
+    }
 
     const now = new Date();
     const year = parsed.data.year || now.getFullYear();
@@ -820,6 +870,10 @@ export async function createEstablishmentAgendaEvent(req, res) {
     const approved = await hasApprovedVenueLink(establishmentId);
     if (!approved) {
       return res.status(403).json({ message: 'Agenda disponivel apenas para estabelecimento com vinculacao aprovada.' });
+    }
+    const isPremium = await hasActivePremium(req.user.id);
+    if (!isPremium) {
+      return res.status(403).json({ message: 'Agenda disponivel apenas para estabelecimentos premium.' });
     }
 
     const payload = parsed.data;
@@ -887,6 +941,10 @@ export async function updateEstablishmentAgendaEvent(req, res) {
     if (!approved) {
       return res.status(403).json({ message: 'Agenda disponível apenas para estabelecimento com vinculação aprovada.' });
     }
+    const isPremium = await hasActivePremium(req.user.id);
+    if (!isPremium) {
+      return res.status(403).json({ message: 'Agenda disponível apenas para estabelecimentos premium.' });
+    }
 
     const existing = await loadEstablishmentAgendaEvent(establishmentId, parsedParams.data.eventId);
     if (!existing) {
@@ -937,6 +995,10 @@ export async function deleteEstablishmentAgendaEvent(req, res) {
     if (!approved) {
       return res.status(403).json({ message: 'Agenda disponível apenas para estabelecimento com vinculação aprovada.' });
     }
+    const isPremium = await hasActivePremium(req.user.id);
+    if (!isPremium) {
+      return res.status(403).json({ message: 'Agenda disponível apenas para estabelecimentos premium.' });
+    }
 
     const existing = await loadEstablishmentAgendaEvent(establishmentId, parsedParams.data.eventId);
     if (!existing) {
@@ -972,6 +1034,10 @@ export async function getEstablishmentAgendaStats(req, res) {
     const approved = await hasApprovedVenueLink(establishmentId);
     if (!approved) {
       return res.status(403).json({ message: 'Estatísticas disponíveis apenas para estabelecimento com vinculação aprovada.' });
+    }
+    const isPremium = await hasActivePremium(req.user.id);
+    if (!isPremium) {
+      return res.status(403).json({ message: 'Estatísticas disponíveis apenas para estabelecimentos premium.' });
     }
 
     const [eventsRows] = await pool.query(
@@ -1059,5 +1125,239 @@ export async function getEstablishmentAgendaStats(req, res) {
     });
   } catch (error) {
     return res.status(500).json({ message: 'Erro ao carregar estatísticas da agenda.' });
+  }
+}
+
+const dashboardQuerySchema = z.object({
+  startDate: z.string().trim().min(10).max(10),
+  endDate: z.string().trim().min(10).max(10),
+});
+
+export async function getEstablishmentDashboard(req, res) {
+  const parsed = dashboardQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    return res.status(400).json({ message: 'Período inválido para dashboard.' });
+  }
+
+  const { startDate, endDate } = parsed.data;
+  if (startDate > endDate) {
+    return res.status(400).json({ message: 'Data inicial deve ser menor ou igual à data final.' });
+  }
+
+  try {
+    const establishmentId = await ensureEstablishmentRecord(req.user.id);
+    const approved = await hasApprovedVenueLink(establishmentId);
+    if (!approved) {
+      return res.status(403).json({ message: 'Dashboard disponível apenas para estabelecimento com vinculação aprovada.' });
+    }
+    const isPremium = await hasActivePremium(req.user.id);
+    if (!isPremium) {
+      return res.status(403).json({ message: 'Dashboard disponível apenas para estabelecimentos premium.' });
+    }
+
+    const startDt = `${startDate} 00:00:00`;
+    const endDt = `${endDate} 23:59:59`;
+
+    /* ── Totais gerais ── */
+    const [totalsRow] = await pool.query(
+      `select
+        count(*) as totalCheckins,
+        count(distinct c.user_id) as uniqueVisitors,
+        count(distinct date(c.checked_in_at)) as activeDays
+      from checkins c
+      join venues v on v.id = c.venue_id
+      where v.establishment_id = ?
+        and c.checked_in_at >= ?
+        and c.checked_in_at <= ?`,
+      [establishmentId, startDt, endDt]
+    );
+
+    /* ── Check-ins por dia ── */
+    const [checkinsByDayRows] = await pool.query(
+      `select
+        date(c.checked_in_at) as day,
+        count(*) as checkins,
+        count(distinct c.user_id) as uniqueVisitors
+      from checkins c
+      join venues v on v.id = c.venue_id
+      where v.establishment_id = ?
+        and c.checked_in_at >= ?
+        and c.checked_in_at <= ?
+      group by date(c.checked_in_at)
+      order by day asc`,
+      [establishmentId, startDt, endDt]
+    );
+
+    /* ── Check-ins por dia da semana ── */
+    const [checkinsByWeekdayRows] = await pool.query(
+      `select
+        dayofweek(c.checked_in_at) as weekday,
+        count(*) as checkins,
+        count(distinct c.user_id) as uniqueVisitors
+      from checkins c
+      join venues v on v.id = c.venue_id
+      where v.establishment_id = ?
+        and c.checked_in_at >= ?
+        and c.checked_in_at <= ?
+      group by dayofweek(c.checked_in_at)
+      order by weekday asc`,
+      [establishmentId, startDt, endDt]
+    );
+
+    /* ── Horários de pico (por hora) ── */
+    const [checkinsByHourRows] = await pool.query(
+      `select
+        hour(c.checked_in_at) as hour,
+        count(*) as checkins
+      from checkins c
+      join venues v on v.id = c.venue_id
+      where v.establishment_id = ?
+        and c.checked_in_at >= ?
+        and c.checked_in_at <= ?
+      group by hour(c.checked_in_at)
+      order by hour asc`,
+      [establishmentId, startDt, endDt]
+    );
+
+    /* ── Tempo médio de permanência ── */
+    const [dwellTimeRow] = await pool.query(
+      `select
+        avg(timestampdiff(minute, c.checked_in_at, c.checked_out_at)) as avgDwellMinutes,
+        count(c.checked_out_at) as completedCheckouts
+      from checkins c
+      join venues v on v.id = c.venue_id
+      where v.establishment_id = ?
+        and c.checked_in_at >= ?
+        and c.checked_in_at <= ?
+        and c.checked_out_at is not null`,
+      [establishmentId, startDt, endDt]
+    );
+
+    /* ── Novos vs recorrentes ── */
+    const [newVsReturningRow] = await pool.query(
+      `select
+        sum(case when user_first_checkin is null then 1 else 0 end) as newVisitors,
+        sum(case when user_first_checkin is not null then 1 else 0 end) as returningVisitors
+      from (
+        select
+          c.user_id,
+          min(c.checked_in_at) over (partition by c.user_id) as user_first_checkin,
+          c.checked_in_at
+        from checkins c
+        join venues v on v.id = c.venue_id
+        where v.establishment_id = ?
+          and c.checked_in_at >= ?
+          and c.checked_in_at <= ?
+      ) c
+      where date(c.checked_in_at) = date(c.user_first_checkin)
+         or c.checked_in_at != c.user_first_checkin`,
+      [establishmentId, startDt, endDt]
+    );
+
+    /* ── Perfil do público (faixa etária) ── */
+    const [ageRangeRows] = await pool.query(
+      `select
+        case
+          when p.age is null then 'Não informado'
+          when p.age < 18 then 'Menor de 18'
+          when p.age between 18 and 24 then '18-24'
+          when p.age between 25 and 34 then '25-34'
+          when p.age between 35 and 44 then '35-44'
+          when p.age >= 45 then '45+'
+        end as ageRange,
+        count(distinct c.user_id) as visitors
+      from checkins c
+      join venues v on v.id = c.venue_id
+      left join profiles p on p.user_id = c.user_id
+      where v.establishment_id = ?
+        and c.checked_in_at >= ?
+        and c.checked_in_at <= ?
+      group by ageRange
+      order by visitors desc`,
+      [establishmentId, startDt, endDt]
+    );
+
+    /* ── Top clientes (mais check-ins) ── */
+    const [topClientsRows] = await pool.query(
+      `select
+        c.user_id as userId,
+        p.name as name,
+        count(*) as checkinCount,
+        max(c.checked_in_at) as lastVisit
+      from checkins c
+      join venues v on v.id = c.venue_id
+      left join profiles p on p.user_id = c.user_id
+      where v.establishment_id = ?
+        and c.checked_in_at >= ?
+        and c.checked_in_at <= ?
+      group by c.user_id, p.name
+      order by checkinCount desc
+      limit 10`,
+      [establishmentId, startDt, endDt]
+    );
+
+    /* ── Dias com maior movimento (ranking) ── */
+    const [topDaysRows] = await pool.query(
+      `select
+        date(c.checked_in_at) as day,
+        count(*) as checkins,
+        count(distinct c.user_id) as uniqueVisitors
+      from checkins c
+      join venues v on v.id = c.venue_id
+      where v.establishment_id = ?
+        and c.checked_in_at >= ?
+        and c.checked_in_at <= ?
+      group by date(c.checked_in_at)
+      order by checkins desc
+      limit 10`,
+      [establishmentId, startDt, endDt]
+    );
+
+    const weekdayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+
+    return res.json({
+      period: { startDate, endDate },
+      totals: {
+        totalCheckins: Number(totalsRow[0]?.totalCheckins || 0),
+        uniqueVisitors: Number(totalsRow[0]?.uniqueVisitors || 0),
+        activeDays: Number(totalsRow[0]?.activeDays || 0),
+        avgDwellMinutes: Number(dwellTimeRow[0]?.avgDwellMinutes || 0),
+        completedCheckouts: Number(dwellTimeRow[0]?.completedCheckouts || 0),
+        newVisitors: Number(newVsReturningRow[0]?.newVisitors || 0),
+        returningVisitors: Number(newVsReturningRow[0]?.returningVisitors || 0),
+      },
+      checkinsByDay: checkinsByDayRows.map((r) => ({
+        day: String(r.day).slice(0, 10),
+        checkins: Number(r.checkins),
+        uniqueVisitors: Number(r.uniqueVisitors),
+      })),
+      checkinsByWeekday: checkinsByWeekdayRows.map((r) => ({
+        weekday: weekdayNames[Number(r.weekday) - 1] || `?${r.weekday}`,
+        checkins: Number(r.checkins),
+        uniqueVisitors: Number(r.uniqueVisitors),
+      })),
+      checkinsByHour: checkinsByHourRows.map((r) => ({
+        hour: Number(r.hour),
+        checkins: Number(r.checkins),
+      })),
+      ageRange: ageRangeRows.map((r) => ({
+        range: r.ageRange,
+        visitors: Number(r.visitors),
+      })),
+      topClients: topClientsRows.map((r) => ({
+        userId: r.userId,
+        name: r.name || 'Usuário',
+        checkinCount: Number(r.checkinCount),
+        lastVisit: r.lastVisit,
+      })),
+      topDays: topDaysRows.map((r) => ({
+        day: String(r.day).slice(0, 10),
+        checkins: Number(r.checkins),
+        uniqueVisitors: Number(r.uniqueVisitors),
+      })),
+    });
+  } catch (error) {
+    console.error('[getEstablishmentDashboard]', error);
+    return res.status(500).json({ message: 'Erro ao carregar dashboard.' });
   }
 }

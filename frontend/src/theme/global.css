@@ -3296,6 +3296,10 @@ textarea {
   overflow: hidden;
 }
 
+.modal--wide {
+  width: min(780px, calc(100% - 32px));
+}
+
 .modal__header {
   display: flex;
   align-items: center;

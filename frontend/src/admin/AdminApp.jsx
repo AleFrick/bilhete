@@ -5,6 +5,7 @@ import AdminShell from './layout/AdminShell';
 import EstablishmentPanelPage from './pages/EstablishmentPanelPage';
 import EstablishmentAgendaPage from './pages/EstablishmentAgendaPage';
 import EstablishmentAgendaStatsPage from './pages/EstablishmentAgendaStatsPage';
+import EstablishmentDashboardPage from './pages/EstablishmentDashboardPage';
 import EstablishmentMenuPage from './pages/EstablishmentMenuPage';
 import AdminLinkRequestsPage from './pages/AdminLinkRequestsPage';
 import AdminPremiumConfigPage from './pages/AdminPremiumConfigPage';
@@ -34,6 +35,7 @@ export default function AdminApp() {
   const [linkRequestsStatus, setLinkRequestsStatus] = useState('pending');
   const [linkRequestsError, setLinkRequestsError] = useState('');
   const [establishmentHasApprovedLink, setEstablishmentHasApprovedLink] = useState(false);
+  const [establishmentIsPremium, setEstablishmentIsPremium] = useState(false);
 
   const isAuthenticated = Boolean(adminUser?.id);
   const isAdminUser = adminUser?.role === 'admin';
@@ -73,23 +75,27 @@ export default function AdminApp() {
         if (prev === 'establishment-premium') {
           return prev;
         }
-        if (prev === 'establishment-agenda' && establishmentHasApprovedLink) {
+        if (prev === 'establishment-agenda' && establishmentHasApprovedLink && establishmentIsPremium) {
           return prev;
         }
-        if (prev === 'establishment-stats' && establishmentHasApprovedLink) {
+        if (prev === 'establishment-stats' && establishmentHasApprovedLink && establishmentIsPremium) {
           return prev;
         }
-        if (prev === 'establishment-menu' && establishmentHasApprovedLink) {
+        if (prev === 'establishment-dashboard' && establishmentHasApprovedLink && establishmentIsPremium) {
+          return prev;
+        }
+        if (prev === 'establishment-menu' && establishmentHasApprovedLink && establishmentIsPremium) {
           return prev;
         }
         return 'establishment-profile';
       });
     }
-  }, [isAdminUser, isEstablishmentUser, establishmentHasApprovedLink]);
+  }, [isAdminUser, isEstablishmentUser, establishmentHasApprovedLink, establishmentIsPremium]);
 
   useEffect(() => {
     if (!isAuthenticated || !isEstablishmentUser) {
       setEstablishmentHasApprovedLink(false);
+      setEstablishmentIsPremium(false);
       return;
     }
 
@@ -105,9 +111,21 @@ export default function AdminApp() {
         if (!cancelled) {
           setEstablishmentHasApprovedLink(hasApproved);
         }
+
+        try {
+          const catalog = await adminApi.premiumCatalog();
+          if (!cancelled) {
+            setEstablishmentIsPremium(Boolean(catalog?.activeSubscription));
+          }
+        } catch {
+          if (!cancelled) {
+            setEstablishmentIsPremium(false);
+          }
+        }
       } catch {
         if (!cancelled) {
           setEstablishmentHasApprovedLink(false);
+          setEstablishmentIsPremium(false);
         }
       }
     };
@@ -370,7 +388,7 @@ export default function AdminApp() {
                   </svg>
                 ),
               },
-              ...(establishmentHasApprovedLink
+              ...(establishmentHasApprovedLink && establishmentIsPremium
                 ? [
                     {
                       key: 'establishment-agenda',
@@ -383,7 +401,7 @@ export default function AdminApp() {
                     },
                   ]
                 : []),
-              ...(establishmentHasApprovedLink
+              ...(establishmentHasApprovedLink && establishmentIsPremium
                 ? [
                     {
                       key: 'establishment-menu',
@@ -396,7 +414,20 @@ export default function AdminApp() {
                     },
                   ]
                 : []),
-              ...(establishmentHasApprovedLink
+              ...(establishmentHasApprovedLink && establishmentIsPremium
+                ? [
+                    {
+                      key: 'establishment-dashboard',
+                      label: 'Dashboard',
+                      icon: (
+                        <svg viewBox="0 0 24 24" focusable="false">
+                          <path d="M3 13h8V3H3v10Zm0 8h8v-6H3v6Zm10 0h8V11h-8v10Zm0-18v6h8V3h-8Z" />
+                        </svg>
+                      ),
+                    },
+                  ]
+                : []),
+              ...(establishmentHasApprovedLink && establishmentIsPremium
                 ? [
                     {
                       key: 'establishment-stats',
@@ -478,6 +509,10 @@ export default function AdminApp() {
 
       {isEstablishmentUser && activeTab === 'establishment-stats' ? (
         <EstablishmentAgendaStatsPage hasApprovedLink={establishmentHasApprovedLink} />
+      ) : null}
+
+      {isEstablishmentUser && activeTab === 'establishment-dashboard' ? (
+        <EstablishmentDashboardPage hasApprovedLink={establishmentHasApprovedLink} />
       ) : null}
     </AdminShell>
   );
