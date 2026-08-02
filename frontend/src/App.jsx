@@ -10,6 +10,10 @@ import HomePage from './pages/HomePage';
 import LandingPage from './pages/LandingPage';
 import PremiumPage from './pages/PremiumPage';
 import ProfilePage from './pages/ProfilePage';
+import PublicVenuePage from './pages/PublicVenuePage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
+import TermsModal from './components/TermsModal';
+import { useNotifications } from './hooks/useNotifications';
 import { clearSession, loadUser, persistSession } from './state/session';
 
 const DEFAULT_NEARBY_RADIUS_KM = 20;
@@ -55,9 +59,14 @@ export default function App() {
   const [loadingPeople, setLoadingPeople] = useState(false);
   const [locationEnabled, setLocationEnabled] = useState(true);
   const [locationBlockedMessage, setLocationBlockedMessage] = useState('');
+  const [venueFilter, setVenueFilter] = useState({ city: undefined, radiusKm: undefined });
   const [authMode, setAuthMode] = useState('login');
   const [showAuthForm, setShowAuthForm] = useState(window.location.pathname !== '/');
+  const [showTermsModal, setShowTermsModal] = useState(false);
   const locationCacheRef = useRef({ resolved: false, value: null });
+
+  const authToken = typeof localStorage !== 'undefined' ? localStorage.getItem('bilhete.token') : null;
+  const { unreadCount, notifications, markAsRead: markNotificationsRead } = useNotifications(authToken);
 
   const decodeBase64UrlJson = (value) => {
     const normalized = String(value || '').replace(/-/g, '+').replace(/_/g, '/');
@@ -209,6 +218,28 @@ export default function App() {
     }
   }, [isAuthenticated]);
 
+  const reloadVenuesWithFilter = async (filter) => {
+    if (!isAuthenticated) return;
+    try {
+      setLoadingVenues(true);
+      const locationResult = await getCachedLocation();
+      const location = locationResult?.coords || null;
+      const radius = filter?.radiusKm || DEFAULT_NEARBY_RADIUS_KM;
+      const data = await api.venues(location, radius, filter?.city);
+      setVenues(data);
+    } catch {
+      // ignore
+    } finally {
+      setLoadingVenues(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isAuthenticated && me?.premiumStatus && (venueFilter.city || venueFilter.radiusKm)) {
+      reloadVenuesWithFilter(venueFilter);
+    }
+  }, [venueFilter]);
+
   const handleLogin = async (payload) => {
     setAuthLoading(true);
     setGlobalError('');
@@ -218,7 +249,11 @@ export default function App() {
       const data = await api.login(payload);
       persistSession(data.token, data.user);
       setMe(data.user);
-      redirectToRoleRoute(data.user);
+      if (data.needsTermsAcceptance) {
+        setShowTermsModal(true);
+      } else {
+        redirectToRoleRoute(data.user);
+      }
     } catch (error) {
       setGlobalError(error.message);
     } finally {
@@ -248,7 +283,12 @@ export default function App() {
     window.location.assign(url);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await api.logout();
+    } catch {
+      // ignore — clear session regardless
+    }
     clearSession();
     setMe(null);
     setVenues([]);
@@ -379,6 +419,7 @@ export default function App() {
           onCheckout={handleCheckout}
           onLoadPeople={handleLoadPeople}
           onSendBilhete={handleSendBilhete}
+          onFilterChange={setVenueFilter}
         />
       );
     }
@@ -404,7 +445,7 @@ export default function App() {
       );
     }
 
-    return <ProfilePage me={me} onSave={handleSaveProfile} apiClient={api} premiumActive={Boolean(me?.premiumStatus)} />;
+    return <ProfilePage me={me} onSave={handleSaveProfile} apiClient={api} premiumActive={Boolean(me?.premiumStatus)} onAccountDeleted={handleLogout} />;
   }, [
     activeTab,
     chats,
@@ -423,6 +464,33 @@ export default function App() {
   ]);
 
   if (!isAuthenticated) {
+    const venueMatch = window.location.pathname.match(/^\/venue\/(\d+)/);
+    if (venueMatch) {
+      return (
+        <PublicVenuePage
+          venueId={Number.parseInt(venueMatch[1], 10)}
+          onGoToApp={() => {
+            window.history.replaceState({}, '', '/');
+          }}
+        />
+      );
+    }
+
+    if (window.location.pathname === '/reset-password') {
+      const params = new URLSearchParams(window.location.search);
+      const resetToken = params.get('token') || '';
+      return (
+        <ResetPasswordPage
+          token={resetToken}
+          onSuccess={() => {
+            window.history.replaceState({}, '', '/app');
+            setShowAuthForm(true);
+            setAuthMode('login');
+          }}
+        />
+      );
+    }
+
     if (window.location.pathname === '/' && !showAuthForm) {
       return (
         <LandingPage
@@ -455,12 +523,29 @@ export default function App() {
     );
   }
 
+  if (showTermsModal) {
+    return (
+      <TermsModal
+        open={showTermsModal}
+        required
+        onClose={() => setShowTermsModal(false)}
+        onAccept={() => {
+          setShowTermsModal(false);
+          redirectToRoleRoute(me);
+        }}
+      />
+    );
+  }
+
   return (
     <AppShell
       activeTab={activeTab}
       onTabChange={setActiveTab}
       onLogout={handleLogout}
       premiumActive={Boolean(me?.premiumStatus)}
+      unreadCount={unreadCount}
+      notifications={notifications}
+      onMarkNotificationsRead={markNotificationsRead}
     >
       <AppNotice message={globalError} type="error" onClose={() => setGlobalError('')} />
       {content}

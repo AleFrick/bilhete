@@ -8,6 +8,12 @@ create table if not exists users (
   email_verification_token_hash char(64),
   email_verification_expires_at timestamp null,
   email_verified_at timestamp null,
+  password_reset_token_hash char(64),
+  password_reset_expires_at timestamp null,
+  token_version int not null default 0,
+  pending_email varchar(190) null,
+  pending_email_token_hash char(64) null,
+  pending_email_expires_at timestamp null,
   created_at timestamp not null default current_timestamp
 );
 
@@ -297,4 +303,88 @@ create table if not exists payment_customers (
   created_at timestamp not null default current_timestamp,
   unique key uniq_payment_customers_user_provider (user_id, provider),
   constraint fk_payment_customers_user foreign key (user_id) references users(id) on delete cascade
+);
+
+create table if not exists establishment_registration_requests (
+  id bigint primary key auto_increment,
+  user_id bigint not null,
+  establishment_name varchar(160) not null,
+  contact_email varchar(190) not null,
+  contact_phone varchar(40),
+  cnpj varchar(20),
+  description text,
+  status enum('pending', 'approved', 'rejected') not null default 'pending',
+  admin_note text,
+  reviewed_at timestamp null,
+  reviewed_by bigint null,
+  created_at timestamp not null default current_timestamp,
+  updated_at timestamp not null default current_timestamp on update current_timestamp,
+  constraint fk_establishment_registration_requests_user
+    foreign key (user_id) references users(id) on delete cascade
+);
+
+create table if not exists establishment_registration_request_messages (
+  id bigint primary key auto_increment,
+  request_id bigint not null,
+  sender_role enum('admin', 'establishment') not null,
+  message text not null,
+  created_at timestamp not null default current_timestamp,
+  constraint fk_establishment_registration_request_messages_request
+    foreign key (request_id) references establishment_registration_requests(id) on delete cascade
+);
+
+create index idx_establishment_registration_requests_status_created
+  on establishment_registration_requests(status, created_at);
+create index idx_establishment_registration_requests_user
+  on establishment_registration_requests(user_id, status);
+create index idx_establishment_registration_request_messages_request_created
+  on establishment_registration_request_messages(request_id, created_at);
+
+create table if not exists lgpd_terms (
+  id bigint primary key auto_increment,
+  version varchar(20) not null unique,
+  title varchar(200) not null,
+  body text not null,
+  is_active tinyint(1) not null default 1,
+  created_at timestamp not null default current_timestamp
+);
+
+create table if not exists user_terms_acceptance (
+  id bigint primary key auto_increment,
+  user_id bigint not null,
+  terms_id bigint not null,
+  terms_version varchar(20) not null,
+  accepted_at timestamp not null default current_timestamp,
+  ip_address varchar(45),
+  user_agent varchar(500),
+  constraint fk_user_terms_acceptance_user
+    foreign key (user_id) references users(id) on delete cascade,
+  constraint fk_user_terms_acceptance_terms
+    foreign key (terms_id) references lgpd_terms(id) on delete cascade
+);
+
+create index idx_user_terms_acceptance_user on user_terms_acceptance(user_id, accepted_at desc);
+create index idx_lgpd_terms_active on lgpd_terms(is_active, created_at desc);
+
+create table if not exists notifications (
+  id bigint primary key auto_increment,
+  user_id bigint not null,
+  type varchar(40) not null,
+  title varchar(200) not null,
+  body varchar(500) default null,
+  data json default null,
+  is_read tinyint(1) not null default 0,
+  created_at timestamp not null default current_timestamp,
+  constraint fk_notifications_user foreign key (user_id) references users(id) on delete cascade,
+  index idx_notifications_user_unread (user_id, is_read, created_at desc)
+);
+
+create table if not exists revoked_tokens (
+  jti varchar(64) primary key,
+  user_id bigint not null,
+  expires_at timestamp not null,
+  created_at timestamp not null default current_timestamp,
+  constraint fk_revoked_tokens_user foreign key (user_id) references users(id) on delete cascade,
+  index idx_revoked_tokens_user (user_id),
+  index idx_revoked_tokens_expires (expires_at)
 );

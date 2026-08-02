@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import { api } from '../api/client';
+import EmptyState from '../components/EmptyState';
 import Modal from '../components/Modal';
+import { useVenuePresence } from '../hooks/useVenuePresence';
 import PageLoader from '../components/PageLoader';
 import RestaurantMenuPreview from '../components/RestaurantMenuPreview';
 
@@ -57,6 +59,8 @@ export default function ExplorePage({
   hideVenueList = false,
   locationEnabled = true,
   locationBlockedMessage = '',
+  premiumActive = false,
+  onFilterChange,
 }) {
   const [activeScreen, setActiveScreen] = useState('venues');
   const [peopleFilter, setPeopleFilter] = useState('');
@@ -70,6 +74,15 @@ export default function ExplorePage({
   const [activeMenuVenue, setActiveMenuVenue] = useState(null);
   const [activeMenuItems, setActiveMenuItems] = useState([]);
   const [loadingMenu, setLoadingMenu] = useState(false);
+  const [cityFilter, setCityFilter] = useState('');
+  const [radiusFilter, setRadiusFilter] = useState(20);
+  const [availableCities, setAvailableCities] = useState([]);
+
+  const presencePeople = useVenuePresence(
+    currentCheckin?.venueId || null,
+    people,
+    Boolean(currentCheckin?.venueId)
+  );
 
   const selectedPerson = useMemo(
     () => displayedPeople.find((person) => person.id === selectedPersonId) || null,
@@ -118,10 +131,41 @@ export default function ExplorePage({
   }, [activeScreen, displayedPeople, selectedPersonId]);
 
   useEffect(() => {
-    if (!loadingPeople) {
+    if (currentCheckin?.venueId) {
+      setDisplayedPeople(presencePeople);
+    } else if (!loadingPeople) {
       setDisplayedPeople(people);
     }
-  }, [loadingPeople, people]);
+  }, [loadingPeople, people, presencePeople, currentCheckin?.venueId]);
+
+  useEffect(() => {
+    if (premiumActive && onFilterChange) {
+      onFilterChange({ city: cityFilter || undefined, radiusKm: radiusFilter });
+    }
+  }, [cityFilter, radiusFilter, premiumActive, onFilterChange]);
+
+  useEffect(() => {
+    if (!premiumActive) {
+      return;
+    }
+
+    let cancelled = false;
+    const loadCities = async () => {
+      try {
+        const cities = await api.venueCities();
+        if (!cancelled && Array.isArray(cities)) {
+          setAvailableCities(cities);
+        }
+      } catch {
+        // ignore
+      }
+    };
+
+    loadCities();
+    return () => {
+      cancelled = true;
+    };
+  }, [premiumActive]);
 
   useEffect(() => {
     if (!Array.isArray(venues) || !venues.length) {
@@ -268,6 +312,39 @@ export default function ExplorePage({
       {!hideVenueList && !currentCheckin ? (
         <section className="panel">
           <h3>Locais para check-in</h3>
+
+          {premiumActive ? (
+            <div className="explore-filters" style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', marginBottom: '8px' }}>
+                <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>Cidade</span>
+                <select
+                  value={cityFilter}
+                  onChange={(event) => setCityFilter(event.target.value)}
+                  style={{ width: '100%', marginTop: '4px', padding: '8px', borderRadius: '8px', border: '1px solid var(--line)', background: 'var(--surface)', color: 'var(--text)' }}
+                >
+                  <option value="">Todas as cidades</option>
+                  {availableCities.map((city) => (
+                    <option key={city} value={city}>{city}</option>
+                  ))}
+                </select>
+              </label>
+              <label style={{ display: 'block' }}>
+                <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>
+                  Distancia maxima: {radiusFilter} km
+                </span>
+                <input
+                  type="range"
+                  min="1"
+                  max="200"
+                  step="1"
+                  value={radiusFilter}
+                  onChange={(event) => setRadiusFilter(Number(event.target.value))}
+                  style={{ width: '100%', marginTop: '4px' }}
+                />
+              </label>
+            </div>
+          ) : null}
+
           {!locationEnabled ? (
             <p className="explore-notice">
               {locationBlockedMessage ||
@@ -276,9 +353,11 @@ export default function ExplorePage({
           ) : loadingVenues ? (
             <PageLoader label="Carregando locais..." />
           ) : !venues.length ? (
-            <p className="explore-notice">
-              Nenhum local cadastrado próximo à sua localização. O Bilhete ainda está em expansão e novos locais são adicionados frequentemente. Tente novamente em outra localização ou mais tarde.
-            </p>
+            <EmptyState
+              icon="📍"
+              title="Nenhum local proximo"
+              message="Nenhum local cadastrado proximo a sua localizacao. O Bilhete ainda esta em expansao e novos locais sao adicionados frequentemente. Tente novamente em outra localizacao ou mais tarde."
+            />
           ) : (
             <ul className="simple-list">
               {venues.map((venue) => (
@@ -392,7 +471,13 @@ export default function ExplorePage({
               {loadingPeople ? (
                 <PageLoader label="Carregando pessoas..." />
               ) : null}
-              {!loadingPeople && !filteredPeople.length ? <p>Nenhuma pessoa encontrada neste local.</p> : null}
+              {!loadingPeople && !filteredPeople.length ? (
+                <EmptyState
+                  icon="🤝"
+                  title="Ninguem por aqui ainda"
+                  message="Nenhuma pessoa encontrada neste local no momento. Faca check-in em outro hotspot ou aguarde mais pessoas chegarem."
+                />
+              ) : null}
 
               {!loadingPeople && filteredPeople.length > 0 ? (
                 <ul className="simple-list people-list-mobile">

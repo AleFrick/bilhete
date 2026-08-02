@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import AppNotice from '../components/AppNotice';
+import TermsModal from '../components/TermsModal';
+import { api } from '../api/client';
 
 export default function AuthPage({
   onLogin,
@@ -14,6 +16,13 @@ export default function AuthPage({
   const [mode, setMode] = useState(initialMode === 'register' ? 'register' : 'login');
   const [form, setForm] = useState({ name: '', email: '', password: '', confirmPassword: '' });
   const [localError, setLocalError] = useState('');
+  const [forgotOpen, setForgotOpen] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotError, setForgotError] = useState('');
+  const [forgotSuccess, setForgotSuccess] = useState('');
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [termsModalOpen, setTermsModalOpen] = useState(false);
   const googleEnabled = import.meta.env.VITE_AUTH_GOOGLE_ENABLED === 'true';
   const icloudEnabled = import.meta.env.VITE_AUTH_ICLOUD_ENABLED === 'true';
   const facebookEnabled = import.meta.env.VITE_AUTH_FACEBOOK_ENABLED === 'true';
@@ -69,6 +78,22 @@ export default function AuthPage({
     setLocalError('');
   }, [successMessage]);
 
+  const handleForgotPassword = async (event) => {
+    event.preventDefault();
+    setForgotError('');
+    setForgotSuccess('');
+    setForgotLoading(true);
+    try {
+      await api.forgotPassword(forgotEmail);
+      setForgotSuccess('Se o email existir, voce recebera um link de recuperacao.');
+      setForgotEmail('');
+    } catch (err) {
+      setForgotError(err.message || 'Erro ao solicitar recuperacao.');
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
   const handleSubmit = (event) => {
     event.preventDefault();
     setLocalError('');
@@ -85,6 +110,11 @@ export default function AuthPage({
 
     if (passwordStrength < minPasswordStrength) {
       setLocalError('Sua senha ainda nao atende os criterios de seguranca.');
+      return;
+    }
+
+    if (!termsAccepted) {
+      setLocalError('Voce precisa aceitar os Termos de Uso e a Politica de Privacidade para se cadastrar.');
       return;
     }
 
@@ -158,6 +188,23 @@ export default function AuthPage({
             />
           </label>
 
+          {mode === 'login' ? (
+            <div style={{ textAlign: 'right', marginTop: '-4px' }}>
+              <button
+                type="button"
+                className="text-link"
+                style={{ fontSize: '0.82rem' }}
+                onClick={() => {
+                  setForgotOpen(true);
+                  setForgotError('');
+                  setForgotSuccess('');
+                }}
+              >
+                Esqueci minha senha
+              </button>
+            </div>
+          ) : null}
+
           {mode === 'register' ? (
             <>
               <div>
@@ -202,6 +249,37 @@ export default function AuthPage({
                 </div>
               </div>
             </>
+          ) : null}
+
+          {mode === 'register' ? (
+            <label
+              style={{
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: '10px',
+                fontSize: '0.82rem',
+                cursor: 'pointer',
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={termsAccepted}
+                onChange={(e) => setTermsAccepted(e.target.checked)}
+                style={{ marginTop: '3px', width: '18px', height: '18px' }}
+              />
+              <span>
+                Li e aceito os{' '}
+                <button
+                  type="button"
+                  className="text-link"
+                  style={{ fontSize: '0.82rem', display: 'inline', padding: 0 }}
+                  onClick={() => setTermsModalOpen(true)}
+                >
+                  Termos de Uso e Politica de Privacidade (LGPD)
+                </button>
+                .
+              </span>
+            </label>
           ) : null}
 
           <button type="submit" className="btn btn--primary" disabled={loading}>
@@ -281,6 +359,65 @@ export default function AuthPage({
           </button>
         </div>
       </section>
+
+      {forgotOpen ? (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.6)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+          }}
+          onClick={() => setForgotOpen(false)}
+        >
+          <div
+            className="auth-card"
+            style={{ maxWidth: '380px', width: '90%', position: 'relative' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 style={{ marginTop: 0 }}>Recuperar senha</h2>
+            <p className="auth-subtitle" style={{ fontSize: '0.85rem' }}>
+              Informe seu email para receber um link de recuperacao.
+            </p>
+
+            <AppNotice message={forgotError} type="error" onClose={() => setForgotError('')} />
+            <AppNotice message={forgotSuccess} type="success" onClose={() => setForgotSuccess('')} />
+
+            <form onSubmit={handleForgotPassword} className="auth-form">
+              <label>
+                Email
+                <input
+                  type="email"
+                  name="user_forgot_email"
+                  value={forgotEmail}
+                  onChange={(e) => setForgotEmail(e.target.value)}
+                  required
+                  autoComplete="off"
+                />
+              </label>
+
+              <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                <button
+                  type="button"
+                  className="btn btn--ghost"
+                  onClick={() => setForgotOpen(false)}
+                  disabled={forgotLoading}
+                >
+                  Cancelar
+                </button>
+                <button type="submit" className="btn btn--primary" disabled={forgotLoading}>
+                  {forgotLoading ? 'Enviando...' : 'Enviar link'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
+
+      <TermsModal open={termsModalOpen} onClose={() => setTermsModalOpen(false)} />
     </main>
   );
 }

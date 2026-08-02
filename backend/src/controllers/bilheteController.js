@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { pool } from '../config/db.js';
+import { createNotification } from '../services/notificationService.js';
 
 const createBilheteSchema = z.object({
   toUserId: z.number().int().positive(),
@@ -40,6 +41,20 @@ export async function sendBilhete(req, res) {
        values (?, ?, ?, ?, ?, 'enviado', now())`,
       [req.user.id, parsed.data.toUserId, parsed.data.venueId, parsed.data.type, parsed.data.message || null]
     );
+
+    const [senderRows] = await pool.query(
+      'select p.name from profiles p where p.user_id = ? limit 1',
+      [req.user.id]
+    );
+    const senderName = senderRows[0]?.name || 'Alguem';
+
+    await createNotification({
+      userId: parsed.data.toUserId,
+      type: 'bilhete',
+      title: 'Novo bilhete!',
+      body: `${senderName} enviou um bilhete para voce.`,
+      data: { bilheteId: insertResult.insertId, venueId: parsed.data.venueId },
+    });
 
     return res.status(201).json({ id: insertResult.insertId });
   } catch (error) {
@@ -172,6 +187,20 @@ export async function respond(req, res) {
           [matchId]
         );
       }
+
+      const [responderRows] = await connection.query(
+        'select p.name from profiles p where p.user_id = ? limit 1',
+        [req.user.id]
+      );
+      const responderName = responderRows[0]?.name || 'Alguem';
+
+      await createNotification({
+        userId: bilhete.from_user,
+        type: 'match',
+        title: 'Voce tem um novo match!',
+        body: `${responderName} aceitou seu bilhete. Comece a conversar agora!`,
+        data: { matchId, venueId: bilhete.venue_id },
+      });
     }
 
     await connection.commit();

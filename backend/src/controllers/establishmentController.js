@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { pool } from '../config/db.js';
+import { validateImageDataUrl, validateImageDataUrls } from '../middleware/imageValidation.js';
 
 const establishmentProfileSchema = z.object({
   displayName: z.string().trim().min(2).max(160),
@@ -553,6 +554,20 @@ export async function upsertEstablishmentProfile(req, res) {
 
   const payload = parsed.data;
 
+  if (payload.logoUrl) {
+    const logoCheck = validateImageDataUrl(payload.logoUrl, { maxBytes: 5 * 1024 * 1024 });
+    if (!logoCheck.valid) {
+      return res.status(400).json({ message: `Logo: ${logoCheck.error}` });
+    }
+  }
+
+  if (payload.galleryUrls && payload.galleryUrls.length > 0) {
+    const galleryCheck = validateImageDataUrls(payload.galleryUrls, { maxBytes: 5 * 1024 * 1024 });
+    if (!galleryCheck.valid) {
+      return res.status(400).json({ message: `Galeria: ${galleryCheck.error}` });
+    }
+  }
+
   try {
     const establishmentId = await ensureEstablishmentRecord(req.user.id);
 
@@ -680,6 +695,13 @@ export async function requestNewVenue(req, res) {
     return res.status(400).json({ message: 'Dados invalidos para solicitar novo local.' });
   }
 
+  if (parsed.data.requestDocuments && parsed.data.requestDocuments.length > 0) {
+    const docCheck = validateImageDataUrls(parsed.data.requestDocuments, { maxBytes: 5 * 1024 * 1024 });
+    if (!docCheck.valid) {
+      return res.status(400).json({ message: `Documentos: ${docCheck.error}` });
+    }
+  }
+
   try {
     const establishmentId = await ensureEstablishmentRecord(req.user.id);
 
@@ -741,6 +763,13 @@ export async function requestVenueLink(req, res) {
   const parsed = requestVenueLinkSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ message: 'Local invalido para vinculacao.' });
+  }
+
+  if (parsed.data.requestDocuments && parsed.data.requestDocuments.length > 0) {
+    const docCheck = validateImageDataUrls(parsed.data.requestDocuments, { maxBytes: 5 * 1024 * 1024 });
+    if (!docCheck.valid) {
+      return res.status(400).json({ message: `Documentos: ${docCheck.error}` });
+    }
   }
 
   try {

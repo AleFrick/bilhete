@@ -28,6 +28,7 @@ export const env = {
   frontendAppUrl: process.env.FRONTEND_APP_URL || 'http://localhost:5173/app',
   emailVerificationBaseUrl: process.env.EMAIL_VERIFICATION_BASE_URL || 'http://localhost:3333',
   emailVerificationTtlHours: Number(process.env.EMAIL_VERIFICATION_TTL_HOURS || 24),
+  passwordResetTtlHours: Number(process.env.PASSWORD_RESET_TTL_HOURS || 12),
   emailTransport: process.env.EMAIL_TRANSPORT || 'log',
   smtpHost: process.env.SMTP_HOST || '',
   smtpPort: Number(process.env.SMTP_PORT || 587),
@@ -49,4 +50,5 @@ export const env = {
   asaasWebhookToken: process.env.ASAAS_WEBHOOK_TOKEN || '',
   asaasEnvironment: process.env.ASAAS_ENVIRONMENT || 'sandbox',
   premiumStoreEnabled: (process.env.PREMIUM_STORE_ENABLED || 'false') === 'true',
+  expirationCleanupIntervalMs: Number(process.env.EXPIRATION_CLEANUP_INTERVAL_MS || 5 * 60 * 1000),
 };

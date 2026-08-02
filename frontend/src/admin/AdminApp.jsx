@@ -7,7 +7,7 @@ import EstablishmentAgendaPage from './pages/EstablishmentAgendaPage';
 import EstablishmentAgendaStatsPage from './pages/EstablishmentAgendaStatsPage';
 import EstablishmentDashboardPage from './pages/EstablishmentDashboardPage';
 import EstablishmentMenuPage from './pages/EstablishmentMenuPage';
-import AdminLinkRequestsPage from './pages/AdminLinkRequestsPage';
+import AdminRequestsPage from './pages/AdminRequestsPage';
 import AdminPremiumConfigPage from './pages/AdminPremiumConfigPage';
 import AdminSupportTicketsPage from './pages/AdminSupportTicketsPage';
 import AdminImportPage from './pages/AdminImportPage';
@@ -15,6 +15,8 @@ import AdminPaymentConfigPage from './pages/AdminPaymentConfigPage';
 import AdminVenuesPage from './pages/AdminVenuesPage';
 import EstablishmentPremiumPage from './pages/EstablishmentPremiumPage';
 import EstablishmentSupportTicketsPage from './pages/EstablishmentSupportTicketsPage';
+import EstablishmentRegistrationPage from './pages/EstablishmentRegistrationPage';
+import RegistrationStatusPage from './pages/RegistrationStatusPage';
 import { clearAdminSession, loadAdminUser, persistAdminSession } from './state/adminSession';
 
 export default function AdminApp() {
@@ -36,15 +38,17 @@ export default function AdminApp() {
   const [linkRequestsError, setLinkRequestsError] = useState('');
   const [establishmentHasApprovedLink, setEstablishmentHasApprovedLink] = useState(false);
   const [establishmentIsPremium, setEstablishmentIsPremium] = useState(false);
+  const [registrationStatus, setRegistrationStatus] = useState(null);
+  const [loadingRegistrationStatus, setLoadingRegistrationStatus] = useState(false);
 
   const isAuthenticated = Boolean(adminUser?.id);
   const isAdminUser = adminUser?.role === 'admin';
   const isEstablishmentUser = adminUser?.role === 'establishment';
+  const isRegularUser = isAuthenticated && !isAdminUser && !isEstablishmentUser;
 
   useEffect(() => {
     if (isAuthenticated && !isAdminUser && !isEstablishmentUser) {
-      window.history.replaceState({}, '', '/app');
-      window.location.reload();
+      // Regular user — check if they have a registration request
       return;
     }
 
@@ -55,9 +59,37 @@ export default function AdminApp() {
   }, [isAuthenticated, isAdminUser, isEstablishmentUser]);
 
   useEffect(() => {
+    if (!isRegularUser) {
+      return;
+    }
+
+    let cancelled = false;
+    const loadRegStatus = async () => {
+      setLoadingRegistrationStatus(true);
+      try {
+        const data = await adminApi.getRegistrationStatus();
+        if (!cancelled) {
+          setRegistrationStatus(data);
+        }
+      } catch {
+        if (!cancelled) {
+          setRegistrationStatus({ hasRequest: false });
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingRegistrationStatus(false);
+        }
+      }
+    };
+
+    loadRegStatus();
+    return () => { cancelled = true; };
+  }, [isRegularUser]);
+
+  useEffect(() => {
     if (isAdminUser) {
       setActiveTab((prev) =>
-        prev === 'venues' || prev === 'link-requests' || prev === 'support-tickets' || prev === 'premium-config' || prev === 'payment-config' || prev === 'import-venues'
+        prev === 'venues' || prev === 'requests' || prev === 'support-tickets' || prev === 'premium-config' || prev === 'payment-config' || prev === 'import-venues'
           ? prev
           : 'venues'
       );
@@ -243,7 +275,12 @@ export default function AdminApp() {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await adminApi.logout();
+    } catch {
+      // ignore
+    }
     clearAdminSession();
     setAdminUser(null);
     setCities([]);
@@ -309,8 +346,47 @@ export default function AdminApp() {
     }
   };
 
-  if (!isAuthenticated || (!isAdminUser && !isEstablishmentUser)) {
+  if (!isAuthenticated) {
     return null;
+  }
+
+  if (isRegularUser) {
+    return (
+      <AdminShell
+        activeTab="registration"
+        onTabChange={() => {}}
+        onLogout={handleLogout}
+        adminName={adminUser?.name}
+        title="Cadastro de estabelecimento"
+        navItems={[
+          {
+            key: 'registration',
+            label: 'Cadastro',
+            icon: (
+              <svg viewBox="0 0 24 24" focusable="false">
+                <path d="M12 12a5 5 0 1 0-5-5 5 5 0 0 0 5 5Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z" />
+              </svg>
+            ),
+          },
+        ]}
+      >
+        {loadingRegistrationStatus ? (
+          <p style={{ opacity: 0.6 }}>Carregando...</p>
+        ) : registrationStatus?.hasRequest ? (
+          <RegistrationStatusPage
+            onApproved={() => {
+              window.location.reload();
+            }}
+          />
+        ) : (
+          <EstablishmentRegistrationPage
+            onSubmitted={() => {
+              window.location.reload();
+            }}
+          />
+        )}
+      </AdminShell>
+    );
   }
 
   return (
@@ -333,8 +409,8 @@ export default function AdminApp() {
                 ),
               },
               {
-                key: 'link-requests',
-                label: 'Pedidos de vinculacao',
+                key: 'requests',
+                label: 'Pedidos',
                 icon: (
                   <svg viewBox="0 0 24 24" focusable="false">
                     <path d="M10.59 13.41 9.17 12l-2.58 2.59a4 4 0 1 0 5.66 5.65l2.59-2.58-1.42-1.41-2.58 2.58a2 2 0 0 1-2.83-2.83l2.58-2.59Zm2.82-2.82 1.41 1.41 2.58-2.58a2 2 0 1 1 2.83 2.83l-2.58 2.59 1.42 1.41 2.58-2.59a4 4 0 0 0-5.66-5.65l-2.58 2.58ZM8 13h8v-2H8v2Z" />
@@ -476,14 +552,14 @@ export default function AdminApp() {
         />
       ) : null}
 
-      {isAdminUser && activeTab === 'link-requests' ? (
-        <AdminLinkRequestsPage
-          requests={linkRequests}
-          loadingRequests={loadingLinkRequests}
-          requestsError={linkRequestsError}
-          requestsStatus={linkRequestsStatus}
-          onChangeStatus={setLinkRequestsStatus}
-          onRefresh={() => loadLinkRequests(linkRequestsStatus)}
+      {isAdminUser && activeTab === 'requests' ? (
+        <AdminRequestsPage
+          linkRequests={linkRequests}
+          loadingLinkRequests={loadingLinkRequests}
+          linkRequestsError={linkRequestsError}
+          linkRequestsStatus={linkRequestsStatus}
+          onChangeLinkRequestsStatus={setLinkRequestsStatus}
+          onRefreshLinkRequests={() => loadLinkRequests(linkRequestsStatus)}
           onUpdateVenueLinkApproval={handleUpdateVenueLinkApproval}
           loadingApproval={loadingCreate}
         />

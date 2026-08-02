@@ -4,6 +4,7 @@ import { MapContainer, Marker, TileLayer, useMap, useMapEvents } from 'react-lea
 
 import { adminApi } from '../api/adminClient';
 import AppNotice from '../../components/AppNotice';
+import ChangePasswordForm from '../../components/ChangePasswordForm';
 
 import 'leaflet/dist/leaflet.css';
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
@@ -1034,6 +1035,14 @@ export default function EstablishmentPanelPage() {
             {savingProfile ? 'Salvando...' : 'Salvar'}
           </button>
         </form>
+      </section>
+
+      <section className="panel">
+        <h2>Alterar senha</h2>
+        <p className="auth-subtitle" style={{ fontSize: '0.85rem', marginBottom: '16px' }}>
+          Informe sua senha atual e a nova senha para trocar.
+        </p>
+        <ChangePasswordForm apiClient={adminApi} />
       </section>
 
       {profileLocationModalOpen ? (

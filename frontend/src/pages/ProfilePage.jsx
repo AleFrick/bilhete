@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 
+import ChangePasswordForm from '../components/ChangePasswordForm';
 import PremiumOrdersHistory from '../components/PremiumOrdersHistory';
+import TermsModal from '../components/TermsModal';
+import { api } from '../api/client';
 
 const INTENTIONS = [
   { value: 'conversar', label: 'Conversar' },
@@ -63,9 +66,16 @@ function resizeDataUrlImage(dataUrl, maxSide = 1080, quality = 0.82) {
   });
 }
 
-export default function ProfilePage({ me, onSave, apiClient, premiumActive }) {
-  const [profileTab, setProfileTab] = useState('profile'); // 'profile' | 'premium'
+export default function ProfilePage({ me, onSave, apiClient, premiumActive, onAccountDeleted }) {
+  const [profileTab, setProfileTab] = useState('profile'); // 'profile' | 'premium' | 'security'
+  const [termsModalOpen, setTermsModalOpen] = useState(false);
   const fileInputRef = useRef(null);
+  const [newEmail, setNewEmail] = useState('');
+  const [emailChangeMsg, setEmailChangeMsg] = useState('');
+  const [emailChangeError, setEmailChangeError] = useState('');
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteError, setDeleteError] = useState('');
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [form, setForm] = useState({
     name: me?.name || '',
     age: me?.age || '',
@@ -223,6 +233,43 @@ export default function ProfilePage({ me, onSave, apiClient, premiumActive }) {
     });
   };
 
+  const handleEmailChange = async (event) => {
+    event.preventDefault();
+    setEmailChangeMsg('');
+    setEmailChangeError('');
+
+    if (!newEmail.trim()) {
+      setEmailChangeError('Informe o novo e-mail.');
+      return;
+    }
+
+    try {
+      const data = await apiClient.changeEmail(newEmail.trim());
+      setEmailChangeMsg(data.message || 'Enviamos um e-mail de confirmacao para o novo endereco.');
+      setNewEmail('');
+    } catch (error) {
+      setEmailChangeError(error.message || 'Erro ao solicitar troca de e-mail.');
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    setDeleteError('');
+
+    if (!deletePassword.trim()) {
+      setDeleteError('Digite sua senha para confirmar.');
+      return;
+    }
+
+    try {
+      await apiClient.deleteAccount(deletePassword);
+      if (onAccountDeleted) {
+        onAccountDeleted();
+      }
+    } catch (error) {
+      setDeleteError(error.message || 'Erro ao excluir conta.');
+    }
+  };
+
   const handleSubmit = (event) => {
     event.preventDefault();
 
@@ -264,6 +311,9 @@ export default function ProfilePage({ me, onSave, apiClient, premiumActive }) {
         <button type="button" style={tabStyle('premium')} onClick={() => setProfileTab('premium')}>
           {premiumActive ? '✦ Premium' : 'Premium'}
         </button>
+        <button type="button" style={tabStyle('security')} onClick={() => setProfileTab('security')}>
+          Segurança
+        </button>
       </div>
 
       {/* Aba Premium */}
@@ -274,6 +324,123 @@ export default function ProfilePage({ me, onSave, apiClient, premiumActive }) {
           <p style={{ opacity: 0.6 }}>Não disponível.</p>
         )
       ) : null}
+
+      {/* Aba Segurança */}
+      {profileTab === 'security' ? (
+        <div className="panel" style={{ padding: '20px' }}>
+          <h2 style={{ marginTop: 0 }}>Alterar senha</h2>
+          <p className="auth-subtitle" style={{ fontSize: '0.85rem', marginBottom: '16px' }}>
+            Informe sua senha atual e a nova senha para trocar.
+          </p>
+          <ChangePasswordForm apiClient={apiClient} />
+
+          <hr style={{ border: 'none', borderTop: '1px solid var(--line)', margin: '24px 0' }} />
+
+          <h2>Alterar e-mail</h2>
+          <p className="auth-subtitle" style={{ fontSize: '0.85rem', marginBottom: '12px' }}>
+            E-mail atual: <strong>{me?.email}</strong>
+          </p>
+          <p className="auth-subtitle" style={{ fontSize: '0.85rem', marginBottom: '12px' }}>
+            Informe o novo e-mail. Enviaremos um link de confirmacao para o novo endereco.
+          </p>
+          {emailChangeMsg ? (
+            <p style={{ fontSize: '0.85rem', color: '#16a34a', marginBottom: '12px' }}>{emailChangeMsg}</p>
+          ) : null}
+          {emailChangeError ? (
+            <p style={{ fontSize: '0.85rem', color: '#dc2626', marginBottom: '12px' }}>{emailChangeError}</p>
+          ) : null}
+          <form onSubmit={handleEmailChange} style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <input
+              type="email"
+              placeholder="novo@email.com"
+              value={newEmail}
+              onChange={(event) => setNewEmail(event.target.value)}
+              style={{ flex: '1 1 200px' }}
+            />
+            <button type="submit" className="btn btn--primary">Solicitar troca</button>
+          </form>
+
+          <hr style={{ border: 'none', borderTop: '1px solid var(--line)', margin: '24px 0' }} />
+
+          <h2>Cadastrar estabelecimento</h2>
+          <p className="auth-subtitle" style={{ fontSize: '0.85rem', marginBottom: '12px' }}>
+            Tem um bar, restaurante ou balada? Cadastre seu estabelecimento na plataforma.
+          </p>
+          <a href="/admin" className="btn btn--ghost" style={{ display: 'inline-block', textDecoration: 'none' }}>
+            Ir para cadastro de estabelecimento
+          </a>
+
+          <hr style={{ border: 'none', borderTop: '1px solid var(--line)', margin: '24px 0' }} />
+
+          <h2>Termos e Privacidade (LGPD)</h2>
+          <p className="auth-subtitle" style={{ fontSize: '0.85rem', marginBottom: '12px' }}>
+            Consulte os Termos de Uso e a Politica de Privacidade do Bilhete.
+          </p>
+          <button
+            type="button"
+            className="btn btn--ghost"
+            onClick={() => setTermsModalOpen(true)}
+          >
+            Ver termos
+          </button>
+
+          <hr style={{ border: 'none', borderTop: '1px solid var(--line)', margin: '24px 0' }} />
+
+          <h2 style={{ color: '#dc2626' }}>Excluir conta</h2>
+          <p className="auth-subtitle" style={{ fontSize: '0.85rem', marginBottom: '12px' }}>
+            A exclusao da conta e permanente e irreversivel. Todos os seus dados (perfil, bilhetes, chats, check-ins) serao removidos em conformidade com a LGPD.
+          </p>
+          {!deleteConfirmOpen ? (
+            <button
+              type="button"
+              className="btn btn--ghost"
+              style={{ color: '#dc2626', borderColor: '#dc2626' }}
+              onClick={() => setDeleteConfirmOpen(true)}
+            >
+              Quero excluir minha conta
+            </button>
+          ) : (
+            <div style={{ marginTop: '12px' }}>
+              {deleteError ? (
+                <p style={{ fontSize: '0.85rem', color: '#dc2626', marginBottom: '12px' }}>{deleteError}</p>
+              ) : null}
+              <p style={{ fontSize: '0.85rem', fontWeight: 600, marginBottom: '8px' }}>
+                Confirme sua senha para excluir permanentemente sua conta:
+              </p>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <input
+                  type="password"
+                  placeholder="Sua senha"
+                  value={deletePassword}
+                  onChange={(event) => setDeletePassword(event.target.value)}
+                  style={{ flex: '1 1 200px' }}
+                />
+                <button
+                  type="button"
+                  className="btn btn--primary"
+                  style={{ background: '#dc2626' }}
+                  onClick={handleDeleteAccount}
+                >
+                  Excluir definitivamente
+                </button>
+                <button
+                  type="button"
+                  className="btn btn--ghost"
+                  onClick={() => {
+                    setDeleteConfirmOpen(false);
+                    setDeletePassword('');
+                    setDeleteError('');
+                  }}
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : null}
+
+      <TermsModal open={termsModalOpen} onClose={() => setTermsModalOpen(false)} />
 
       {profileTab === 'profile' ? (
       <>

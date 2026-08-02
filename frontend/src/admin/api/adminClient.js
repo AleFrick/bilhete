@@ -59,6 +59,7 @@ async function request(path, options = {}) {
 
 export const adminApi = {
   login: (payload) => request('/admin/auth/login', { method: 'POST', body: JSON.stringify(payload) }),
+  logout: () => request('/auth/logout', { method: 'POST' }),
   venueCities: () => request('/admin/venues/cities'),
   venueLinkRequests: ({ status } = {}) => {
     const params = new URLSearchParams();
@@ -276,4 +277,26 @@ export const adminApi = {
   getPaymentSettings: () => request('/admin/payment/settings'),
   updatePaymentSettings: (payload) =>
     request('/admin/payment/settings', { method: 'PUT', body: JSON.stringify(payload) }),
+  changePassword: (currentPassword, newPassword) =>
+    request('/auth/change-password', { method: 'POST', body: JSON.stringify({ currentPassword, newPassword }) }),
+  submitRegistration: (payload) =>
+    request('/registration/submit', { method: 'POST', body: JSON.stringify(payload) }),
+  getRegistrationStatus: () => request('/registration/status'),
+  getRegistrationMessages: (requestId) => request(`/registration/${requestId}/messages`),
+  sendRegistrationMessage: (requestId, message) =>
+    request(`/registration/${requestId}/messages`, { method: 'POST', body: JSON.stringify({ message }) }),
+  adminRegistrationRequests: ({ status } = {}) => {
+    const params = new URLSearchParams();
+    if (status) params.set('status', status);
+    const query = params.toString();
+    return request(`/admin/registration-requests${query ? `?${query}` : ''}`);
+  },
+  adminReviewRegistration: (requestId, payload) =>
+    request(`/admin/registration-requests/${requestId}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  adminListTerms: () => request('/admin/terms'),
+  adminCreateTerms: (payload) =>
+    request('/admin/terms', { method: 'POST', body: JSON.stringify(payload) }),
+  getActiveTerms: () => request('/terms/active'),
+  getTermsStatus: () => request('/terms/status'),
+  acceptTerms: () => request('/terms/accept', { method: 'POST' }),
 };

@@ -1,9 +1,12 @@
 import { useMemo, useState, useEffect } from 'react';
 
 import ExplorePage from './ExplorePage';
+import EmptyState from '../components/EmptyState';
 import Modal from '../components/Modal';
 import PageLoader from '../components/PageLoader';
+import PremiumVenueFilter from '../components/PremiumVenueFilter';
 import RestaurantMenuPreview from '../components/RestaurantMenuPreview';
+import ShareVenueModal from '../components/ShareVenueModal';
 import VenuePhotosModal from '../components/VenuePhotosModal';
 import VenueAgendaModal from '../components/VenueAgendaModal';
 import { api } from '../api/client';
@@ -125,11 +128,13 @@ export default function HomePage({
   onCheckout,
   onLoadPeople,
   onSendBilhete,
+  onFilterChange,
 }) {
   const [hotspotFilter, setHotspotFilter] = useState('');
   const [openPhotosModal, setOpenPhotosModal] = useState(null);
   const [openAgendaModal, setOpenAgendaModal] = useState(null);
   const [openMenuModal, setOpenMenuModal] = useState(null);
+  const [openShareModal, setOpenShareModal] = useState(null);
   const [venueDetailsCache, setVenueDetailsCache] = useState({});
   const [venueMenuCache, setVenueMenuCache] = useState({});
   const radarByVenueId = new Map(radar.map((item) => [item.id, item]));
@@ -223,6 +228,9 @@ export default function HomePage({
             />
           </label>
         ) : null}
+        {premiumActive && onFilterChange ? (
+          <PremiumVenueFilter onFilterChange={onFilterChange} />
+        ) : null}
         {locationEnabled ? (
           <ul className="simple-list">
             {filteredVenues.map((venue) => {
@@ -308,6 +316,15 @@ export default function HomePage({
                         Fotos
                       </button>
                     )}
+                    <button
+                      type="button"
+                      className="btn btn--ghost btn--xs"
+                      title="Compartilhar local"
+                      aria-label={`Compartilhar ${venue.name}`}
+                      onClick={() => setOpenShareModal(venue)}
+                    >
+                      Compartilhar
+                    </button>
                   </div>
                 </div>
                 <button
@@ -330,7 +347,18 @@ export default function HomePage({
           </ul>
         ) : null}
         {locationEnabled && premiumActive && !loadingVenues && !filteredVenues.length ? (
-          <p>Nenhum local encontrado para este filtro.</p>
+          <EmptyState
+            icon="🔍"
+            title="Nenhum local encontrado"
+            message="Nenhum local encontrado para este filtro. Tente buscar com outros termos."
+          />
+        ) : null}
+        {locationEnabled && !premiumActive && !loadingVenues && !filteredVenues.length ? (
+          <EmptyState
+            icon="📍"
+            title="Nenhum hotspot por aqui"
+            message="Nao encontramos locais proximos a voce. O Bilhete esta em expansao e novos locais sao adicionados frequentemente. Tente novamente mais tarde ou em outra localizacao."
+          />
         ) : null}
       </section>
 
@@ -346,6 +374,8 @@ export default function HomePage({
         onSendBilhete={onSendBilhete}
         locationEnabled={locationEnabled}
         locationBlockedMessage={locationBlockedMessage}
+        premiumActive={premiumActive}
+        onFilterChange={onFilterChange}
         hideVenueList
       />
 
@@ -385,6 +415,13 @@ export default function HomePage({
           onClose={() => setOpenAgendaModal(null)}
           venueId={openAgendaModal}
           venueName={venues.find((v) => v.id === openAgendaModal)?.name}
+        />
+      )}
+
+      {openShareModal && (
+        <ShareVenueModal
+          venue={openShareModal}
+          onClose={() => setOpenShareModal(null)}
         />
       )}
     </div>

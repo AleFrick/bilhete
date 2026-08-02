@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { pool } from '../config/db.js';
+import { broadcastCheckin, broadcastCheckout } from '../services/presenceService.js';
 
 const checkinSchema = z.object({
   venueId: z.number().int().positive(),
@@ -50,6 +51,7 @@ export async function checkin(req, res) {
     await connection.query('update profiles set venue_id = ? where user_id = ?', [parsed.data.venueId, req.user.id]);
 
     await connection.commit();
+    broadcastCheckin(parsed.data.venueId, req.user.id);
     return res.status(201).json({ id: insertResult.insertId, venueId: parsed.data.venueId });
   } catch (error) {
     await connection.rollback();
@@ -93,6 +95,7 @@ export async function checkout(req, res) {
     );
 
     await connection.commit();
+    broadcastCheckout(venueId, req.user.id);
     return res.json({ ok: true });
   } catch (error) {
     await connection.rollback();

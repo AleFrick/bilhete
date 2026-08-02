@@ -8,11 +8,13 @@ if (!resolvedApiBaseUrl) {
 
 const API_BASE_URL = resolvedApiBaseUrl.replace(/\/$/, '');
 
+export { API_BASE_URL };
+
 function buildApiUrl(path) {
   return `${API_BASE_URL}${path}`;
 }
 
-function getToken() {
+export function getToken() {
   return localStorage.getItem('bilhete.token');
 }
 
@@ -64,11 +66,26 @@ export const api = {
   loginGoogle: (payload) => request('/auth/google', { method: 'POST', body: JSON.stringify(payload) }),
   loginIcloud: (payload) => request('/auth/apple', { method: 'POST', body: JSON.stringify(payload) }),
   loginFacebook: (payload) => request('/auth/facebook', { method: 'POST', body: JSON.stringify(payload) }),
+  forgotPassword: (email) => request('/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email }) }),
+  resetPassword: (token, password) => request('/auth/reset-password', { method: 'POST', body: JSON.stringify({ token, password }) }),
+  changePassword: (currentPassword, newPassword) => request('/auth/change-password', { method: 'POST', body: JSON.stringify({ currentPassword, newPassword }) }),
+  logout: () => request('/auth/logout', { method: 'POST' }),
+
+  getActiveTerms: () => request('/terms/active'),
+  getTermsStatus: () => request('/terms/status'),
+  acceptTerms: () => request('/terms/accept', { method: 'POST' }),
+  getTermsHistory: () => request('/terms/history'),
+
+  getNotifications: () => request('/notifications'),
+  markNotificationsRead: () => request('/notifications/read', { method: 'POST' }),
 
   me: () => request('/me'),
   updateMe: (payload) => request('/me', { method: 'PUT', body: JSON.stringify(payload) }),
+  changeEmail: (newEmail) => request('/me/email', { method: 'PUT', body: JSON.stringify({ newEmail }) }),
+  deleteAccount: (password) => request('/me', { method: 'DELETE', body: JSON.stringify({ password }) }),
+  publicVenue: (venueId) => request(`/public/venues/${venueId}`),
 
-  venues: (coords, radiusKm) => {
+  venues: (coords, radiusKm, city) => {
     const params = new URLSearchParams();
     if (Number.isFinite(coords?.lat) && Number.isFinite(coords?.lng)) {
       params.set('lat', String(coords.lat));
@@ -79,9 +96,14 @@ export const api = {
       params.set('radiusKm', String(radiusKm));
     }
 
+    if (city) {
+      params.set('city', city);
+    }
+
     const query = params.toString();
     return request(`/venues${query ? `?${query}` : ''}`);
   },
+  venueCities: () => request('/venues/cities'),
   venuePeople: (venueId) => request(`/venues/${venueId}/people`),
   venueDetails: (venueId) => request(`/venues/${venueId}/details`),
   venueMenu: (venueId) => request(`/venues/${venueId}/menu`),

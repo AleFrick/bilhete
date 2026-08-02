@@ -44,7 +44,7 @@ export async function loginAdmin(req, res) {
     const [rows] = await pool.query(
       `select id, name, email, role, password_hash
        from users
-       where email = ? and role in ('admin', 'establishment')
+       where email = ? and role in ('admin', 'establishment', 'user') and is_active = 1
        limit 1`,
       [email]
     );
@@ -73,7 +73,7 @@ export async function loginAdmin(req, res) {
       return res.status(401).json({ message: 'Credenciais invalidas.' });
     }
 
-    const token = signToken(panelUser);
+    const token = await signToken(panelUser);
     return res.json({
       token,
       user: {

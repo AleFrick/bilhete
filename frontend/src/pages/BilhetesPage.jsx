@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react';
 
+import EmptyState from '../components/EmptyState';
+
 function normalizeTimestamp(value) {
   if (!value) {
     return 0;
@@ -69,7 +71,25 @@ export default function BilhetesPage({ inbox, outbox, onRespond }) {
           </button>
         </div>
 
-        {!bilhetes.length ? <p>Nenhum bilhete encontrado para este filtro.</p> : null}
+        {!bilhetes.length ? (
+          <EmptyState
+            icon={filter === 'recebidos' ? '📭' : filter === 'enviados' ? '✉️' : '💌'}
+            title={
+              filter === 'recebidos'
+                ? 'Nenhum bilhete recebido'
+                : filter === 'enviados'
+                  ? 'Voce ainda nao enviou bilhetes'
+                  : 'Nenhum bilhete ainda'
+            }
+            message={
+              filter === 'recebidos'
+                ? 'Quando alguem enviar um bilhete para voce, ele aparecera aqui. Faca check-in em um hotspot para receber bilhetes de pessoas no mesmo local!'
+                : filter === 'enviados'
+                  ? 'Entre em um hotspot, encontre pessoas por perto e envie seu primeiro bilhete. Quem sabe nao rola um match?'
+                  : 'Faca check-in em um hotspot, encontre pessoas proximas e troque bilhetes. Seus bilhetes enviados e recebidos aparecerao aqui.'
+            }
+          />
+        ) : null}
         <ul className="simple-list">
           {bilhetes.map((item) => (
             <li key={item.id} className={`bilhete-item bilhete-item--${item.direction}`}>

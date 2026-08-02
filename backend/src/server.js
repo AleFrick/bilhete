@@ -4,6 +4,7 @@ import express from "express";
 import { pool } from "./config/db.js";
 import { env } from "./config/env.js";
 import routes from "./routes/index.js";
+import { cleanupExpiredMatchesAndChats } from "./services/expirationService.js";
 
 const app = express();
 let startupDbStatus = "pending";
@@ -148,6 +149,27 @@ async function startServer() {
 
   const server = app.listen(env.port, () => {
     logInfo(`Bilhete backend running on http://localhost:${env.port}`);
+
+    setInterval(async () => {
+      try {
+        const result = await cleanupExpiredMatchesAndChats();
+        if (result.expiredChats > 0 || result.expiredMatches > 0) {
+          logInfo(
+            `Expiration cleanup: ${result.expiredChats} chats, ${result.expiredMatches} matches, ${result.deletedMessages} messages removed`,
+          );
+        }
+      } catch (error) {
+        logInfo(`Expiration cleanup error: ${error?.message || String(error)}`);
+      }
+    }, env.expirationCleanupIntervalMs);
+
+    setInterval(async () => {
+      try {
+        await pool.query('delete from revoked_tokens where expires_at < now()');
+      } catch (error) {
+        logInfo(`Revoked tokens cleanup error: ${error?.message || String(error)}`);
+      }
+    }, 60 * 60 * 1000).unref();
   });
 
   server.on("error", (error) => {

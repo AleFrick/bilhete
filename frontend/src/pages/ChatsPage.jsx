@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
+import EmptyState from '../components/EmptyState';
+
 function getChatAvatar(chat) {
   if (Array.isArray(chat?.otherUserPhotos) && chat.otherUserPhotos.length) {
     return chat.otherUserPhotos[0];
@@ -70,7 +72,13 @@ export default function ChatsPage({ chats, messages, selectedChatId, onSelectCha
     <section className="panel chat-hub">
       <div className="chat-list-wrap">
         <h3>Conversas</h3>
-        {!chats.length ? <p>Nenhum chat ativo.</p> : null}
+        {!chats.length ? (
+          <EmptyState
+            icon="💬"
+            title="Nenhuma conversa ainda"
+            message="Quando voce enviar um bilhete e a pessoa aceitar, um chat sera aberto aqui. Os chats duram 12 horas apos o match, entao nao perca tempo!"
+          />
+        ) : null}
         <ul className="chat-list">
           {chats.map((chat) => (
             <li key={chat.id}>
@@ -124,6 +132,13 @@ export default function ChatsPage({ chats, messages, selectedChatId, onSelectCha
             </header>
 
             <div className="chat-messages">
+              {!messages.length ? (
+                <EmptyState
+                  icon="✏️"
+                  title="Nenhuma mensagem ainda"
+                  message="Envie a primeira mensagem e inicie a conversa!"
+                />
+              ) : null}
               {messages.map((message) => {
                 const isMine = message.senderId === currentUserId;
 

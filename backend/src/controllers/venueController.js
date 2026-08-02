@@ -19,6 +19,7 @@ const venuesQuerySchema = z.object({
     (value) => (value === undefined || value === null || value === '' ? 20 : Number(value)),
     z.number().positive().max(200)
   ),
+  city: z.string().trim().min(2).max(120).optional(),
 });
 
 export async function listVenues(req, res) {
@@ -28,6 +29,7 @@ export async function listVenues(req, res) {
   }
 
   const hasLocation = Number.isFinite(parsedQuery.data.lat) && Number.isFinite(parsedQuery.data.lng);
+  const cityFilter = parsedQuery.data.city || '';
 
   try {
     let rows;
@@ -58,11 +60,14 @@ export async function listVenues(req, res) {
         from venues v
         left join establishments e on e.id = v.establishment_id
         where v.lat is not null and v.lng is not null
+          ${cityFilter ? 'and v.address like ?' : ''}
         having distanceKm <= ?
         order by
           distanceKm asc,
           v.created_at desc`,
-        [parsedQuery.data.lat, parsedQuery.data.lng, parsedQuery.data.lat, parsedQuery.data.radiusKm]
+        cityFilter
+          ? [parsedQuery.data.lat, parsedQuery.data.lng, parsedQuery.data.lat, `%${cityFilter}%`, parsedQuery.data.radiusKm]
+          : [parsedQuery.data.lat, parsedQuery.data.lng, parsedQuery.data.lat, parsedQuery.data.radiusKm]
       );
 
       rows = locationRows;
@@ -95,7 +100,9 @@ export async function listVenues(req, res) {
           v.created_at as createdAt
         from venues v
         left join establishments e on e.id = v.establishment_id
-        order by v.created_at desc`
+        ${cityFilter ? 'where v.address like ?' : ''}
+        order by v.created_at desc`,
+        cityFilter ? [`%${cityFilter}%`] : []
       );
 
       rows = defaultRows;
@@ -104,6 +111,25 @@ export async function listVenues(req, res) {
     return res.json(rows);
   } catch (error) {
     return res.status(500).json({ message: 'Erro ao carregar venues.' });
+  }
+}
+
+export async function listVenueCities(req, res) {
+  try {
+    const [rows] = await pool.query(
+      `select distinct
+        trim(substring_index(substring_index(v.address, ',', -2), ',', 1)) as city
+      from venues v
+      where v.address is not null and v.address != ''
+        and v.lat is not null and v.lng is not null
+      having city is not null and city != ''
+      order by city asc`
+    );
+
+    const cities = rows.map((row) => row.city).filter(Boolean);
+    return res.json(cities);
+  } catch (error) {
+    return res.status(500).json({ message: 'Erro ao carregar cidades.' });
   }
 }
 
@@ -325,5 +351,89 @@ export async function getRadar(req, res) {
     return res.json(rows);
   } catch (error) {
     return res.status(500).json({ message: 'Erro ao carregar radar premium.' });
+  }
+}
+
+export async function getPublicVenue(req, res) {
+  const parsed = venueParamSchema.safeParse(req.params);
+  if (!parsed.success) {
+    return res.status(400).json({ message: 'venueId invalido.' });
+  }
+
+  try {
+    const [rows] = await pool.query(
+      `select
+        v.id,
+        v.name,
+        v.address,
+        v.lat,
+        v.lng,
+        v.category,
+        e.id as establishmentId,
+        e.display_name as establishmentName,
+        e.logo_url as establishmentLogoUrl,
+        e.gallery_urls as galleryUrls,
+        e.description,
+        e.contact_phone as contactPhone
+      from venues v
+      left join establishments e on e.id = v.establishment_id
+      where v.id = ?
+      limit 1`,
+      [parsed.data.venueId]
+    );
+
+    if (!rows.length) {
+      return res.status(404).json({ message: 'Venue nao encontrado.' });
+    }
+
+    const venue = rows[0];
+    let galleryUrls = [];
+
+    if (Array.isArray(venue.galleryUrls)) {
+      galleryUrls = venue.galleryUrls;
+    } else if (typeof venue.galleryUrls === 'string' && venue.galleryUrls.trim()) {
+      try {
+        galleryUrls = JSON.parse(venue.galleryUrls);
+      } catch {
+        galleryUrls = [];
+      }
+    }
+
+    let agendaEvents = [];
+    if (venue.establishmentId) {
+      const [eventRows] = await pool.query(
+        `select
+          id,
+          event_date as eventDate,
+          start_time as startTime,
+          title,
+          information,
+          party_flyer_url as partyFlyerUrl
+        from establishment_agenda_events
+        where establishment_id = ?
+          and event_date >= curdate()
+        order by event_date asc, start_time asc
+        limit 10`,
+        [venue.establishmentId]
+      );
+      agendaEvents = eventRows;
+    }
+
+    return res.json({
+      id: venue.id,
+      name: venue.name,
+      address: venue.address,
+      lat: venue.lat,
+      lng: venue.lng,
+      category: venue.category,
+      establishmentName: venue.establishmentName,
+      establishmentLogoUrl: venue.establishmentLogoUrl,
+      galleryUrls,
+      description: venue.description,
+      contactPhone: venue.contactPhone,
+      agendaEvents,
+    });
+  } catch (error) {
+    return res.status(500).json({ message: 'Erro ao carregar venue.' });
   }
 }

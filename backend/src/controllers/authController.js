@@ -1,11 +1,12 @@
 import bcrypt from 'bcryptjs';
 import { createHash, createHmac, randomBytes } from 'crypto';
+import jwt from 'jsonwebtoken';
 import { z } from 'zod';
 
 import { pool } from '../config/db.js';
 import { env } from '../config/env.js';
-import { signToken } from '../middleware/auth.js';
-import { sendRegistrationVerificationEmail } from '../services/emailService.js';
+import { signToken, revokeToken, revokeAllUserTokens } from '../middleware/auth.js';
+import { sendRegistrationVerificationEmail, sendPasswordResetEmail } from '../services/emailService.js';
 
 const registerSchema = z.object({
   name: z.string().min(2),
@@ -134,6 +135,18 @@ export async function register(req, res) {
       [userInsert.insertId, name, 'observando', 0]
     );
 
+    const [activeTerms] = await connection.query(
+      'select id, version from lgpd_terms where is_active = 1 order by created_at desc limit 1'
+    );
+    if (activeTerms.length > 0) {
+      const ipAddress = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
+      const userAgent = req.headers['user-agent'] || null;
+      await connection.query(
+        'insert into user_terms_acceptance (user_id, terms_id, terms_version, ip_address, user_agent) values (?, ?, ?, ?, ?)',
+        [userInsert.insertId, activeTerms[0].id, activeTerms[0].version, ipAddress, userAgent]
+      );
+    }
+
     await sendRegistrationVerificationEmail({
       to: normalizedEmail,
       name,
@@ -218,9 +231,22 @@ export async function login(req, res) {
       return res.status(401).json({ message: 'Credenciais invalidas.' });
     }
 
-    const token = signToken(user);
+    const [activeTerms] = await pool.query(
+      'select id, version from lgpd_terms where is_active = 1 order by created_at desc limit 1'
+    );
+    let needsTermsAcceptance = false;
+    if (activeTerms.length > 0) {
+      const [acceptRows] = await pool.query(
+        'select id from user_terms_acceptance where user_id = ? and terms_id = ? limit 1',
+        [user.id, activeTerms[0].id]
+      );
+      needsTermsAcceptance = acceptRows.length === 0;
+    }
+
+    const token = await signToken(user);
     return res.json({
       token,
+      needsTermsAcceptance,
       user: {
         id: user.id,
         name: user.name,
@@ -511,7 +537,7 @@ export async function googleOAuthCallback(req, res) {
       throw new Error('Confirme seu e-mail antes de entrar.');
     }
     const authUser = toAuthPayload(user);
-    const token = signToken(user);
+    const token = await signToken(user);
     return res.redirect(buildFrontendRedirectUrl({ token, user: authUser }));
   } catch (error) {
     return res.redirect(buildFrontendRedirectUrl({ errorMessage: error.message || 'Erro no login Google.' }));
@@ -562,7 +588,7 @@ export async function facebookOAuthCallback(req, res) {
       throw new Error('Confirme seu e-mail antes de entrar.');
     }
     const authUser = toAuthPayload(user);
-    const token = signToken(user);
+    const token = await signToken(user);
     return res.redirect(buildFrontendRedirectUrl({ token, user: authUser }));
   } catch (error) {
     return res.redirect(buildFrontendRedirectUrl({ errorMessage: error.message || 'Erro no login Facebook.' }));
@@ -614,7 +640,7 @@ export async function appleOAuthCallback(req, res) {
       throw new Error('Confirme seu e-mail antes de entrar.');
     }
     const authUser = toAuthPayload(user);
-    const token = signToken(user);
+    const token = await signToken(user);
     return res.redirect(buildFrontendRedirectUrl({ token, user: authUser }));
   } catch (error) {
     return res.redirect(buildFrontendRedirectUrl({ errorMessage: error.message || 'Erro no login iCloud.' }));
@@ -637,12 +663,213 @@ async function loginWithSocialProvider(req, res, provider) {
       return res.status(403).json({ message: 'Confirme seu e-mail antes de entrar.' });
     }
     const authUser = toAuthPayload(user);
-    const token = signToken(user);
+    const token = await signToken(user);
     return res.json({
       token,
       user: authUser,
     });
   } catch (error) {
     return res.status(500).json({ message: 'Erro ao autenticar com login social.' });
+  }
+}
+
+const forgotPasswordSchema = z.object({
+  email: z.string().email(),
+});
+
+export async function forgotPassword(req, res) {
+  const parsed = forgotPasswordSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ message: 'Email invalido.' });
+  }
+
+  const normalizedEmail = String(parsed.data.email || '').trim().toLowerCase();
+
+  try {
+    const [rows] = await pool.query(
+      'select id, name from users where email = ? limit 1',
+      [normalizedEmail]
+    );
+
+    const user = rows[0];
+    if (!user) {
+      return res.json({ message: 'Se o email existir, voce recebera um link de recuperacao.' });
+    }
+
+    const resetToken = randomBytes(32).toString('hex');
+    const resetTokenHash = hashVerificationToken(resetToken);
+    const expiresAt = new Date(Date.now() + env.passwordResetTtlHours * 60 * 60 * 1000);
+
+    await pool.query(
+      `update users
+       set password_reset_token_hash = ?,
+           password_reset_expires_at = ?
+       where id = ?`,
+      [resetTokenHash, expiresAt, user.id]
+    );
+
+    const resetLink = new URL('/reset-password', env.frontendAppUrl);
+    resetLink.searchParams.set('token', resetToken);
+
+    await sendPasswordResetEmail({
+      to: normalizedEmail,
+      name: user.name,
+      resetLink: resetLink.toString(),
+    });
+
+    return res.json({ message: 'Se o email existir, voce recebera um link de recuperacao.' });
+  } catch (error) {
+    console.error('[auth:forgotPassword] failed', error?.stack || error?.message || String(error));
+    return res.status(500).json({ message: 'Erro ao processar recuperacao de senha.' });
+  }
+}
+
+const resetPasswordSchema = z.object({
+  token: z.string().min(40).max(200),
+  password: z.string().min(6),
+});
+
+export async function resetPassword(req, res) {
+  const parsed = resetPasswordSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ message: 'Dados invalidos para redefinir senha.' });
+  }
+
+  const { token, password } = parsed.data;
+  const tokenHash = hashVerificationToken(token);
+
+  try {
+    const [rows] = await pool.query(
+      `select
+        id,
+        password_reset_expires_at as expiresAt
+      from users
+      where password_reset_token_hash = ?
+      limit 1`,
+      [tokenHash]
+    );
+
+    const user = rows[0];
+    if (!user) {
+      return res.status(400).json({ message: 'Token de recuperacao invalido ou expirado.' });
+    }
+
+    const expiresAt = user.expiresAt ? new Date(user.expiresAt) : null;
+    if (!expiresAt || Number.isNaN(expiresAt.getTime()) || expiresAt.getTime() < Date.now()) {
+      return res.status(400).json({ message: 'Token de recuperacao expirado.' });
+    }
+
+    const passwordStrength = computePasswordStrengthScore(password);
+    if (passwordStrength < env.authPasswordMinStrength) {
+      return res.status(400).json({
+        message: `Senha fraca. Use pelo menos nivel ${env.authPasswordMinStrength} de forca.`,
+        minStrength: env.authPasswordMinStrength,
+        currentStrength: passwordStrength,
+      });
+    }
+
+    const normalizedPassword = normalizeIncomingPassword(password);
+    const passwordHash = await bcrypt.hash(normalizedPassword, 10);
+
+    await pool.query(
+      `update users
+       set password_hash = ?,
+           password_reset_token_hash = null,
+           password_reset_expires_at = null
+       where id = ?`,
+      [passwordHash, user.id]
+    );
+
+    await revokeAllUserTokens(user.id);
+
+    return res.json({ message: 'Senha redefinida com sucesso. Voce ja pode entrar normalmente.' });
+  } catch (error) {
+    console.error('[auth:resetPassword] failed', error?.stack || error?.message || String(error));
+    return res.status(500).json({ message: 'Erro ao redefinir senha.' });
+  }
+}
+
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(6),
+});
+
+export async function changePassword(req, res) {
+  const parsed = changePasswordSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ message: 'Dados invalidos para troca de senha.' });
+  }
+
+  const { currentPassword, newPassword } = parsed.data;
+
+  try {
+    const [rows] = await pool.query(
+      'select id, password_hash from users where id = ? limit 1',
+      [req.user.id]
+    );
+
+    const user = rows[0];
+    if (!user) {
+      return res.status(404).json({ message: 'Usuario nao encontrado.' });
+    }
+
+    const isBcryptHash = typeof user.password_hash === 'string' && user.password_hash.startsWith('$2');
+    let validPassword = false;
+
+    if (isBcryptHash) {
+      const normalizedCurrent = normalizeIncomingPassword(currentPassword);
+      validPassword = await bcrypt.compare(normalizedCurrent, user.password_hash);
+      if (!validPassword && env.passwordClientHashEnabled && normalizedCurrent !== currentPassword) {
+        validPassword = await bcrypt.compare(currentPassword, user.password_hash);
+      }
+    } else {
+      validPassword =
+        process.env.NODE_ENV !== 'production' &&
+        (normalizeIncomingPassword(currentPassword) === user.password_hash || currentPassword === user.password_hash);
+    }
+
+    if (!validPassword) {
+      return res.status(401).json({ message: 'Senha atual incorreta.' });
+    }
+
+    const passwordStrength = computePasswordStrengthScore(newPassword);
+    if (passwordStrength < env.authPasswordMinStrength) {
+      return res.status(400).json({
+        message: `Senha fraca. Use pelo menos nivel ${env.authPasswordMinStrength} de forca.`,
+        minStrength: env.authPasswordMinStrength,
+        currentStrength: passwordStrength,
+      });
+    }
+
+    const normalizedNew = normalizeIncomingPassword(newPassword);
+    const passwordHash = await bcrypt.hash(normalizedNew, 10);
+
+    await pool.query('update users set password_hash = ? where id = ?', [passwordHash, user.id]);
+
+    await revokeAllUserTokens(user.id);
+
+    return res.json({ message: 'Senha alterada com sucesso. Faca login novamente.' });
+  } catch (error) {
+    console.error('[auth:changePassword] failed', error?.stack || error?.message || String(error));
+    return res.status(500).json({ message: 'Erro ao alterar senha.' });
+  }
+}
+
+export async function logout(req, res) {
+  try {
+    const authHeader = req.headers.authorization || '';
+    const [, token] = authHeader.split(' ');
+
+    if (token && req.user?.jti) {
+      const decoded = jwt.decode(token);
+      const expiresAt = decoded?.exp
+        ? new Date(decoded.exp * 1000).toISOString().slice(0, 19).replace('T', ' ')
+        : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 19).replace('T', ' ');
+      await revokeToken(req.user.jti, req.user.id, expiresAt);
+    }
+
+    return res.json({ message: 'Logout realizado com sucesso.' });
+  } catch (error) {
+    return res.status(500).json({ message: 'Erro ao fazer logout.' });
   }
 }
