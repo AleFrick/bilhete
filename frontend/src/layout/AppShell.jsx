@@ -44,17 +44,20 @@ export default function AppShell({ activeTab, onTabChange, onLogout, children, p
             type="button"
             className="btn btn--ghost"
             onClick={handleBellClick}
-            style={{ position: 'relative', padding: '6px 10px' }}
+            style={{ position: 'relative', padding: '6px 10px', display: 'inline-flex', alignItems: 'center' }}
             aria-label="Notificacoes"
           >
-            <span style={{ fontSize: '1.1rem' }}>&#128276;</span>
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+            </svg>
             {unreadCount > 0 ? (
               <span
                 style={{
                   position: 'absolute',
                   top: '-2px',
                   right: '-2px',
-                  background: '#dc2626',
+                  background: 'var(--accent)',
                   color: '#fff',
                   fontSize: '0.65rem',
                   fontWeight: 700,
@@ -81,16 +84,16 @@ export default function AppShell({ activeTab, onTabChange, onLogout, children, p
                 width: '320px',
                 maxHeight: '400px',
                 overflowY: 'auto',
-                background: 'var(--card, #fff)',
-                border: '1px solid var(--line, #e5e7eb)',
+                background: 'var(--surface)',
+                border: '1px solid var(--line)',
                 borderRadius: '12px',
-                boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                boxShadow: '0 8px 24px rgba(0,0,0,0.35)',
                 zIndex: 100,
                 padding: '8px',
               }}
             >
               {notifications.length === 0 ? (
-                <p style={{ textAlign: 'center', opacity: 0.5, padding: '20px 0', fontSize: '0.85rem' }}>
+                <p style={{ textAlign: 'center', color: 'var(--muted)', padding: '20px 0', fontSize: '0.85rem' }}>
                   Sem notificacoes.
                 </p>
               ) : (
@@ -99,15 +102,15 @@ export default function AppShell({ activeTab, onTabChange, onLogout, children, p
                     key={n.id}
                     style={{
                       padding: '10px 12px',
-                      borderBottom: '1px solid var(--line, #f0f0f0)',
+                      borderBottom: '1px solid var(--line)',
                       opacity: n.isRead ? 0.6 : 1,
                     }}
                   >
-                    <p style={{ margin: 0, fontWeight: 600, fontSize: '0.82rem' }}>{n.title}</p>
+                    <p style={{ margin: 0, fontWeight: 600, fontSize: '0.82rem', color: 'var(--text)' }}>{n.title}</p>
                     {n.body ? (
-                      <p style={{ margin: '2px 0 0', fontSize: '0.78rem', opacity: 0.7 }}>{n.body}</p>
+                      <p style={{ margin: '2px 0 0', fontSize: '0.78rem', color: 'var(--muted)' }}>{n.body}</p>
                     ) : null}
-                    <p style={{ margin: '2px 0 0', fontSize: '0.68rem', opacity: 0.4 }}>
+                    <p style={{ margin: '2px 0 0', fontSize: '0.68rem', color: 'var(--muted)', opacity: 0.6 }}>
                       {new Date(n.createdAt).toLocaleString('pt-BR')}
                     </p>
                   </div>
