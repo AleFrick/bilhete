@@ -1,4 +1,4 @@
-import { clearAdminToken, saveAdminToken } from '../api/adminClient';
+import { clearAdminToken, saveAdminToken, saveAdminRefreshToken } from '../api/adminClient';
 
 const ADMIN_USER_KEY = 'bilhete.admin.user';
 const USER_KEY = 'bilhete.user';
@@ -17,8 +17,11 @@ export function loadAdminUser() {
   }
 }
 
-export function persistAdminSession(token, user) {
+export function persistAdminSession(token, user, refreshToken) {
   saveAdminToken(token);
+  if (refreshToken) {
+    saveAdminRefreshToken(refreshToken);
+  }
   localStorage.setItem(ADMIN_USER_KEY, JSON.stringify(user));
   localStorage.setItem(USER_KEY, JSON.stringify(user));
 }

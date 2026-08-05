@@ -5,7 +5,7 @@ import { z } from 'zod';
 
 import { pool } from '../config/db.js';
 import { env } from '../config/env.js';
-import { signToken, revokeToken, revokeAllUserTokens } from '../middleware/auth.js';
+import { signToken, signRefreshToken, revokeToken, revokeAllUserTokens, revokeAllUserRefreshTokens, verifyRefreshToken, revokeRefreshToken } from '../middleware/auth.js';
 import { sendRegistrationVerificationEmail, sendPasswordResetEmail } from '../services/emailService.js';
 
 const registerSchema = z.object({
@@ -244,8 +244,10 @@ export async function login(req, res) {
     }
 
     const token = await signToken(user);
+    const refreshToken = await signRefreshToken(user);
     return res.json({
       token,
+      refreshToken,
       needsTermsAcceptance,
       user: {
         id: user.id,
@@ -323,7 +325,7 @@ export async function loginFacebook(req, res) {
   return loginWithSocialProvider(req, res, 'facebook');
 }
 
-function buildFrontendRedirectUrl({ token, user, errorMessage }) {
+function buildFrontendRedirectUrl({ token, refreshToken, user, errorMessage }) {
   const url = new URL(env.frontendAppUrl);
 
   if (errorMessage) {
@@ -334,6 +336,9 @@ function buildFrontendRedirectUrl({ token, user, errorMessage }) {
   const encodedUser = Buffer.from(JSON.stringify(user), 'utf8').toString('base64url');
   url.searchParams.set('social_token', token);
   url.searchParams.set('social_user', encodedUser);
+  if (refreshToken) {
+    url.searchParams.set('social_refresh_token', refreshToken);
+  }
   return url.toString();
 }
 
@@ -538,7 +543,8 @@ export async function googleOAuthCallback(req, res) {
     }
     const authUser = toAuthPayload(user);
     const token = await signToken(user);
-    return res.redirect(buildFrontendRedirectUrl({ token, user: authUser }));
+    const refreshToken = await signRefreshToken(user);
+    return res.redirect(buildFrontendRedirectUrl({ token, refreshToken, user: authUser }));
   } catch (error) {
     return res.redirect(buildFrontendRedirectUrl({ errorMessage: error.message || 'Erro no login Google.' }));
   }
@@ -589,7 +595,8 @@ export async function facebookOAuthCallback(req, res) {
     }
     const authUser = toAuthPayload(user);
     const token = await signToken(user);
-    return res.redirect(buildFrontendRedirectUrl({ token, user: authUser }));
+    const refreshToken = await signRefreshToken(user);
+    return res.redirect(buildFrontendRedirectUrl({ token, refreshToken, user: authUser }));
   } catch (error) {
     return res.redirect(buildFrontendRedirectUrl({ errorMessage: error.message || 'Erro no login Facebook.' }));
   }
@@ -641,7 +648,8 @@ export async function appleOAuthCallback(req, res) {
     }
     const authUser = toAuthPayload(user);
     const token = await signToken(user);
-    return res.redirect(buildFrontendRedirectUrl({ token, user: authUser }));
+    const refreshToken = await signRefreshToken(user);
+    return res.redirect(buildFrontendRedirectUrl({ token, refreshToken, user: authUser }));
   } catch (error) {
     return res.redirect(buildFrontendRedirectUrl({ errorMessage: error.message || 'Erro no login iCloud.' }));
   }
@@ -664,8 +672,10 @@ async function loginWithSocialProvider(req, res, provider) {
     }
     const authUser = toAuthPayload(user);
     const token = await signToken(user);
+    const refreshToken = await signRefreshToken(user);
     return res.json({
       token,
+      refreshToken,
       user: authUser,
     });
   } catch (error) {
@@ -781,6 +791,7 @@ export async function resetPassword(req, res) {
     );
 
     await revokeAllUserTokens(user.id);
+    await revokeAllUserRefreshTokens(user.id);
 
     return res.json({ message: 'Senha redefinida com sucesso. Voce ja pode entrar normalmente.' });
   } catch (error) {
@@ -847,6 +858,7 @@ export async function changePassword(req, res) {
     await pool.query('update users set password_hash = ? where id = ?', [passwordHash, user.id]);
 
     await revokeAllUserTokens(user.id);
+    await revokeAllUserRefreshTokens(user.id);
 
     return res.json({ message: 'Senha alterada com sucesso. Faca login novamente.' });
   } catch (error) {
@@ -864,12 +876,85 @@ export async function logout(req, res) {
       const decoded = jwt.decode(token);
       const expiresAt = decoded?.exp
         ? new Date(decoded.exp * 1000).toISOString().slice(0, 19).replace('T', ' ')
-        : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 19).replace('T', ' ');
+        : new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 19).replace('T', ' ');
       await revokeToken(req.user.jti, req.user.id, expiresAt);
+    }
+
+    const rawRefreshToken = req.body?.refreshToken;
+    if (rawRefreshToken) {
+      await revokeRefreshToken(rawRefreshToken);
     }
 
     return res.json({ message: 'Logout realizado com sucesso.' });
   } catch (error) {
     return res.status(500).json({ message: 'Erro ao fazer logout.' });
+  }
+}
+
+const refreshSchema = z.object({
+  refreshToken: z.string().min(10),
+});
+
+export async function refreshToken(req, res) {
+  const parsed = refreshSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ message: 'Refresh token invalido.' });
+  }
+
+  const result = await verifyRefreshToken(parsed.data.refreshToken);
+  if (!result) {
+    return res.status(401).json({ message: 'Refresh token invalido ou expirado.' });
+  }
+
+  try {
+    const [rows] = await pool.query(
+      `select
+        u.id,
+        u.name,
+        u.email,
+        u.role,
+        u.is_active as isActive,
+        u.token_version as token_version,
+        case
+          when exists (
+            select 1 from premium_subscriptions ps
+            where ps.user_id = u.id
+              and ps.status = 'active'
+              and ps.ends_at > current_timestamp
+          ) then 1
+          else 0
+        end as premiumStatus,
+        p.premium_expires_at as premiumExpiresAt
+      from users u
+      left join profiles p on p.user_id = u.id
+      where u.id = ?
+      limit 1`,
+      [result.userId]
+    );
+
+    const user = rows[0];
+    if (!user || !user.isActive) {
+      return res.status(401).json({ message: 'Usuario invalido.' });
+    }
+
+    const newToken = await signToken(user);
+    const newRefreshToken = await signRefreshToken(user);
+
+    await revokeRefreshToken(parsed.data.refreshToken);
+
+    return res.json({
+      token: newToken,
+      refreshToken: newRefreshToken,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        premiumStatus: Boolean(user.premiumStatus),
+        premiumExpiresAt: user.premiumExpiresAt,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({ message: 'Erro ao renovar token.' });
   }
 }

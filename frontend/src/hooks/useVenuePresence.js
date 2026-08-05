@@ -13,42 +13,53 @@ export function useVenuePresence(venueId, initialPeople, enabled) {
   useEffect(() => {
     if (!enabled || !venueId) return;
 
-    const token = getToken();
-    if (!token) return;
+    let es = null;
+    let reconnectTimer = null;
 
-    const url = `${API_BASE_URL}/venues/${venueId}/presence/stream?token=${encodeURIComponent(token)}`;
-    const es = new EventSource(url);
-    eventSourceRef.current = es;
+    const openStream = () => {
+      const token = getToken();
+      if (!token) return;
 
-    es.addEventListener('checkin', (event) => {
-      try {
-        const person = JSON.parse(event.data);
-        setPeople((prev) => {
-          if (prev.some((p) => p.id === person.id)) {
-            return prev;
-          }
-          return [person, ...prev];
-        });
-      } catch {
-        // ignore
-      }
-    });
+      const url = `${API_BASE_URL}/venues/${venueId}/presence/stream?token=${encodeURIComponent(token)}`;
+      es = new EventSource(url);
+      eventSourceRef.current = es;
 
-    es.addEventListener('checkout', (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        setPeople((prev) => prev.filter((p) => p.id !== data.id));
-      } catch {
-        // ignore
-      }
-    });
+      es.addEventListener('checkin', (event) => {
+        try {
+          const person = JSON.parse(event.data);
+          setPeople((prev) => {
+            if (prev.some((p) => p.id === person.id)) {
+              return prev;
+            }
+            return [person, ...prev];
+          });
+        } catch {
+          // ignore
+        }
+      });
 
-    es.onerror = () => {
-      // EventSource auto-reconnects; no action needed
+      es.addEventListener('checkout', (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          setPeople((prev) => prev.filter((p) => p.id !== data.id));
+        } catch {
+          // ignore
+        }
+      });
+
+      es.onerror = () => {
+        if (es.readyState === EventSource.CLOSED) {
+          es.close();
+          reconnectTimer = setTimeout(openStream, 3000);
+        }
+      };
     };
 
+    openStream();
+
     return () => {
-      es.close();
+      if (es) es.close();
+      if (reconnectTimer) clearTimeout(reconnectTimer);
       eventSourceRef.current = null;
     };
   }, [venueId, enabled]);

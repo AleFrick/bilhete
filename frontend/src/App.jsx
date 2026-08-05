@@ -14,7 +14,7 @@ import PublicVenuePage from './pages/PublicVenuePage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import TermsModal from './components/TermsModal';
 import { useNotifications } from './hooks/useNotifications';
-import { clearSession, loadUser, persistSession } from './state/session';
+import { clearSession, loadUser, persistSession, getRefreshToken } from './state/session';
 
 const DEFAULT_NEARBY_RADIUS_KM = 20;
 
@@ -77,6 +77,7 @@ export default function App() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const socialToken = params.get('social_token');
+    const socialRefreshToken = params.get('social_refresh_token');
     const socialUserRaw = params.get('social_user');
     const socialError = params.get('social_error');
 
@@ -89,7 +90,7 @@ export default function App() {
     } else {
       try {
         const parsedUser = decodeBase64UrlJson(socialUserRaw);
-        persistSession(socialToken, parsedUser);
+        persistSession(socialToken, parsedUser, socialRefreshToken);
         setMe(parsedUser);
       } catch {
         setGlobalError('Nao foi possivel concluir o login social.');
@@ -97,6 +98,7 @@ export default function App() {
     }
 
     params.delete('social_token');
+    params.delete('social_refresh_token');
     params.delete('social_user');
     params.delete('social_error');
     const nextQuery = params.toString();
@@ -247,7 +249,7 @@ export default function App() {
 
     try {
       const data = await api.login(payload);
-      persistSession(data.token, data.user);
+      persistSession(data.token, data.user, data.refreshToken);
       setMe(data.user);
       if (data.needsTermsAcceptance) {
         setShowTermsModal(true);
@@ -285,7 +287,7 @@ export default function App() {
 
   const handleLogout = async () => {
     try {
-      await api.logout();
+      await api.logout(getRefreshToken());
     } catch {
       // ignore — clear session regardless
     }

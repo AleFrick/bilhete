@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { API_BASE_URL, api } from '../api/client';
+import { API_BASE_URL, api, getToken } from '../api/client';
 
 export function useNotifications(token, { onNotification } = {}) {
   const [unreadCount, setUnreadCount] = useState(0);
@@ -37,29 +37,44 @@ export function useNotifications(token, { onNotification } = {}) {
 
     loadNotifications();
 
-    const url = `${API_BASE_URL}/notifications/stream?token=${encodeURIComponent(token)}`;
-    const es = new EventSource(url);
-    eventSourceRef.current = es;
+    let es = null;
+    let reconnectTimer = null;
 
-    es.onmessage = (event) => {
-      try {
-        const notification = JSON.parse(event.data);
-        setNotifications((prev) => [notification, ...prev].slice(0, 50));
-        setUnreadCount((prev) => prev + 1);
-        if (onNotificationRef.current) {
-          onNotificationRef.current(notification);
+    const openStream = () => {
+      const currentToken = getToken() || token;
+      if (!currentToken) return;
+
+      const url = `${API_BASE_URL}/notifications/stream?token=${encodeURIComponent(currentToken)}`;
+      es = new EventSource(url);
+      eventSourceRef.current = es;
+
+      es.onmessage = (event) => {
+        try {
+          const notification = JSON.parse(event.data);
+          setNotifications((prev) => [notification, ...prev].slice(0, 50));
+          setUnreadCount((prev) => prev + 1);
+          if (onNotificationRef.current) {
+            onNotificationRef.current(notification);
+          }
+        } catch {
+          // ignore parse errors (heartbeat comments)
         }
-      } catch {
-        // ignore parse errors (heartbeat comments)
-      }
+      };
+
+      es.onerror = () => {
+        // EventSource auto-reconnects, but if token expired we need to close and reopen with fresh token
+        if (es.readyState === EventSource.CLOSED) {
+          es.close();
+          reconnectTimer = setTimeout(openStream, 3000);
+        }
+      };
     };
 
-    es.onerror = () => {
-      // EventSource auto-reconnects; nothing to do here
-    };
+    openStream();
 
     return () => {
-      es.close();
+      if (es) es.close();
+      if (reconnectTimer) clearTimeout(reconnectTimer);
       eventSourceRef.current = null;
     };
   }, [token, loadNotifications]);

@@ -1,6 +1,7 @@
-import { clearToken, saveToken } from '../api/client';
+import { clearToken, saveToken, getToken } from '../api/client';
 
 const USER_KEY = 'bilhete.user';
+const REFRESH_TOKEN_KEY = 'bilhete.refreshToken';
 
 export function loadUser() {
   const raw = localStorage.getItem(USER_KEY);
@@ -21,12 +22,20 @@ export function loadUser() {
   }
 }
 
-export function persistSession(token, user) {
+export function getRefreshToken() {
+  return localStorage.getItem(REFRESH_TOKEN_KEY);
+}
+
+export function persistSession(token, user, refreshToken) {
   saveToken(token);
   localStorage.setItem(USER_KEY, JSON.stringify(user));
+  if (refreshToken) {
+    localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+  }
 }
 
 export function clearSession() {
   clearToken();
   localStorage.removeItem(USER_KEY);
+  localStorage.removeItem(REFRESH_TOKEN_KEY);
 }

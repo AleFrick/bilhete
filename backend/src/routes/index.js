@@ -54,6 +54,7 @@ import {
   resetPassword,
   changePassword,
   logout,
+  refreshToken,
   startAppleOAuth,
   startFacebookOAuth,
   startGoogleOAuth,
@@ -176,6 +177,7 @@ router.post('/auth/forgot-password', passwordLimiter, forgotPassword);
 router.post('/auth/reset-password', passwordLimiter, resetPassword);
 router.post('/auth/change-password', authRequired, passwordLimiter, changePassword);
 router.post('/auth/logout', authRequired, logout);
+router.post('/auth/refresh', refreshToken);
 router.get('/terms/active', getActiveTerms);
 router.get('/terms/status', authRequired, getTermsStatus);
 router.post('/terms/accept', authRequired, acceptTerms);

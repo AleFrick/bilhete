@@ -261,6 +261,7 @@ export async function deleteAccount(req, res) {
     await pool.query('delete from user_terms_acceptance where user_id = ?', [req.user.id]);
     await pool.query('delete from notifications where user_id = ?', [req.user.id]);
     await pool.query('delete from revoked_tokens where user_id = ?', [req.user.id]);
+    await pool.query('delete from refresh_tokens where user_id = ?', [req.user.id]);
     await pool.query('delete from profiles where user_id = ?', [req.user.id]);
     await pool.query('delete from checkins where user_id = ?', [req.user.id]);
     await pool.query('delete from bilhetes where from_user = ? or to_user = ?', [req.user.id, req.user.id]);

@@ -261,7 +261,7 @@ export default function AdminApp() {
 
     try {
       const data = await adminApi.login(payload);
-      persistAdminSession(data.token, data.user);
+      persistAdminSession(data.token, data.user, data.refreshToken);
       setAdminUser(data.user);
       if (data.user?.role === 'establishment') {
         window.history.replaceState({}, '', '/admin/establishment');

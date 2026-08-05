@@ -4,7 +4,7 @@ import { z } from 'zod';
 
 import { pool } from '../config/db.js';
 import { env } from '../config/env.js';
-import { signToken } from '../middleware/auth.js';
+import { signToken, signRefreshToken } from '../middleware/auth.js';
 
 const adminLoginSchema = z.object({
   email: z.string().email(),
@@ -74,8 +74,10 @@ export async function loginAdmin(req, res) {
     }
 
     const token = await signToken(panelUser);
+    const refreshToken = await signRefreshToken(panelUser);
     return res.json({
       token,
+      refreshToken,
       user: {
         id: panelUser.id,
         name: panelUser.name,

@@ -26,6 +26,62 @@ export function clearToken() {
   localStorage.removeItem('bilhete.token');
 }
 
+export function getRefreshToken() {
+  return localStorage.getItem('bilhete.refreshToken');
+}
+
+export function saveRefreshToken(token) {
+  localStorage.setItem('bilhete.refreshToken', token);
+}
+
+export function clearRefreshToken() {
+  localStorage.removeItem('bilhete.refreshToken');
+}
+
+let refreshingPromise = null;
+
+async function tryRefreshToken() {
+  if (refreshingPromise) {
+    return refreshingPromise;
+  }
+
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) {
+    return false;
+  }
+
+  refreshingPromise = (async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken }),
+      });
+
+      if (!response.ok) {
+        clearToken();
+        clearRefreshToken();
+        return false;
+      }
+
+      const data = await response.json();
+      saveToken(data.token);
+      if (data.refreshToken) {
+        saveRefreshToken(data.refreshToken);
+      }
+      return true;
+    } catch {
+      clearToken();
+      clearRefreshToken();
+      return false;
+    } finally {
+      refreshingPromise = null;
+    }
+  })();
+
+  return refreshingPromise;
+}
+
 async function request(path, options = {}) {
   const headers = {
     'Content-Type': 'application/json',
@@ -41,6 +97,50 @@ async function request(path, options = {}) {
     ...options,
     headers,
   });
+
+  if (response.status === 401 && token) {
+    const refreshed = await tryRefreshToken();
+    if (refreshed) {
+      const newToken = getToken();
+      const retryHeaders = {
+        ...headers,
+        Authorization: `Bearer ${newToken}`,
+      };
+
+      const retryResponse = await fetch(`${API_BASE_URL}${path}`, {
+        ...options,
+        headers: retryHeaders,
+      });
+
+      if (!retryResponse.ok) {
+        let message = 'Erro na requisicao';
+        try {
+          const data = await retryResponse.json();
+          message = data.message || message;
+        } catch (error) {
+          // Ignore JSON parse failure and use default message.
+        }
+        throw new Error(message);
+      }
+
+      if (retryResponse.status === 204) {
+        return null;
+      }
+
+      return retryResponse.json();
+    }
+
+    clearToken();
+    clearRefreshToken();
+    let message = 'Sessao expirada. Faca login novamente.';
+    try {
+      const data = await response.json();
+      message = data.message || message;
+    } catch (error) {
+      // Ignore
+    }
+    throw new Error(message);
+  }
 
   if (!response.ok) {
     let message = 'Erro na requisicao';
@@ -69,7 +169,7 @@ export const api = {
   forgotPassword: (email) => request('/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email }) }),
   resetPassword: (token, password) => request('/auth/reset-password', { method: 'POST', body: JSON.stringify({ token, password }) }),
   changePassword: (currentPassword, newPassword) => request('/auth/change-password', { method: 'POST', body: JSON.stringify({ currentPassword, newPassword }) }),
-  logout: () => request('/auth/logout', { method: 'POST' }),
+  logout: (refreshToken) => request('/auth/logout', { method: 'POST', body: JSON.stringify({ refreshToken: refreshToken || undefined }) }),
 
   getActiveTerms: () => request('/terms/active'),
   getTermsStatus: () => request('/terms/status'),

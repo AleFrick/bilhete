@@ -8,19 +8,73 @@ if (!resolvedApiBaseUrl) {
 
 const API_BASE_URL = resolvedApiBaseUrl.replace(/\/$/, '');
 const ADMIN_TOKEN_KEY = 'bilhete.admin.token';
+const ADMIN_REFRESH_TOKEN_KEY = 'bilhete.admin.refreshToken';
 const USER_TOKEN_KEY = 'bilhete.token';
+const USER_REFRESH_TOKEN_KEY = 'bilhete.refreshToken';
 
 function getAdminToken() {
   return localStorage.getItem(ADMIN_TOKEN_KEY) || localStorage.getItem(USER_TOKEN_KEY);
+}
+
+function getAdminRefreshToken() {
+  return localStorage.getItem(ADMIN_REFRESH_TOKEN_KEY) || localStorage.getItem(USER_REFRESH_TOKEN_KEY);
 }
 
 export function saveAdminToken(token) {
   localStorage.setItem(ADMIN_TOKEN_KEY, token);
 }
 
+export function saveAdminRefreshToken(token) {
+  localStorage.setItem(ADMIN_REFRESH_TOKEN_KEY, token);
+}
+
 export function clearAdminToken() {
   localStorage.removeItem(ADMIN_TOKEN_KEY);
+  localStorage.removeItem(ADMIN_REFRESH_TOKEN_KEY);
   localStorage.removeItem(USER_TOKEN_KEY);
+  localStorage.removeItem(USER_REFRESH_TOKEN_KEY);
+}
+
+let adminRefreshingPromise = null;
+
+async function tryAdminRefresh() {
+  if (adminRefreshingPromise) {
+    return adminRefreshingPromise;
+  }
+
+  const refreshToken = getAdminRefreshToken();
+  if (!refreshToken) {
+    return false;
+  }
+
+  adminRefreshingPromise = (async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken }),
+      });
+
+      if (!response.ok) {
+        clearAdminToken();
+        return false;
+      }
+
+      const data = await response.json();
+      saveAdminToken(data.token);
+      if (data.refreshToken) {
+        saveAdminRefreshToken(data.refreshToken);
+      }
+      return true;
+    } catch {
+      clearAdminToken();
+      return false;
+    } finally {
+      adminRefreshingPromise = null;
+    }
+  })();
+
+  return adminRefreshingPromise;
 }
 
 async function request(path, options = {}) {
@@ -38,6 +92,44 @@ async function request(path, options = {}) {
     ...options,
     headers,
   });
+
+  if (response.status === 401 && token) {
+    const refreshed = await tryAdminRefresh();
+    if (refreshed) {
+      const newToken = getAdminToken();
+      const retryResponse = await fetch(`${API_BASE_URL}${path}`, {
+        ...options,
+        headers: { ...headers, Authorization: `Bearer ${newToken}` },
+      });
+
+      if (!retryResponse.ok) {
+        let message = 'Erro na requisicao';
+        try {
+          const data = await retryResponse.json();
+          message = data.message || message;
+        } catch (error) {
+          // Ignore
+        }
+        throw new Error(message);
+      }
+
+      if (retryResponse.status === 204) {
+        return null;
+      }
+
+      return retryResponse.json();
+    }
+
+    clearAdminToken();
+    let message = 'Sessao expirada. Faca login novamente.';
+    try {
+      const data = await response.json();
+      message = data.message || message;
+    } catch (error) {
+      // Ignore
+    }
+    throw new Error(message);
+  }
 
   if (!response.ok) {
     let message = 'Erro na requisicao';
@@ -59,7 +151,10 @@ async function request(path, options = {}) {
 
 export const adminApi = {
   login: (payload) => request('/admin/auth/login', { method: 'POST', body: JSON.stringify(payload) }),
-  logout: () => request('/auth/logout', { method: 'POST' }),
+  logout: () => {
+    const refreshToken = getAdminRefreshToken();
+    return request('/auth/logout', { method: 'POST', body: JSON.stringify({ refreshToken: refreshToken || undefined }) });
+  },
   venueCities: () => request('/admin/venues/cities'),
   venueLinkRequests: ({ status } = {}) => {
     const params = new URLSearchParams();
