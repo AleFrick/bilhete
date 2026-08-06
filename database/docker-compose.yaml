@@ -33,6 +33,32 @@ services:
     networks:
       - bilhete-net
 
+  # Garante que o usuário de prod existe com host '%' (permite conexão
+  # via rede Docker). Roda toda vez que o compose sobe, após o MySQL ficar healthy.
+  mysql-prod-init:
+    image: mysql:8.4
+    container_name: bilhete-DB-prod-init
+    depends_on:
+      mysql-prod:
+        condition: service_healthy
+    environment:
+      MYSQL_PROD_ROOT_PASSWORD: ${MYSQL_PROD_ROOT_PASSWORD}
+      MYSQL_PROD_DATABASE: ${MYSQL_PROD_DATABASE}
+      MYSQL_PROD_USER: ${MYSQL_PROD_USER}
+      MYSQL_PROD_PASSWORD: ${MYSQL_PROD_PASSWORD}
+    entrypoint: >
+      bash -c "
+      mysql -h bilhete-DB-prod -u root -p\"$${MYSQL_PROD_ROOT_PASSWORD}\" -e \"
+      CREATE USER IF NOT EXISTS '$${MYSQL_PROD_USER}'@'%' IDENTIFIED BY '$${MYSQL_PROD_PASSWORD}';
+      ALTER USER '$${MYSQL_PROD_USER}'@'%' IDENTIFIED BY '$${MYSQL_PROD_PASSWORD}';
+      GRANT ALL PRIVILEGES ON $${MYSQL_PROD_DATABASE}.* TO '$${MYSQL_PROD_USER}'@'%';
+      FLUSH PRIVILEGES;\"
+      && echo '[init] Usuario prod OK'
+      "
+    restart: "no"
+    networks:
+      - bilhete-net
+
   # ─────────────────────────────────────────────────────────
   # Banco de HOMOLOGAÇÃO (HML)
   # ─────────────────────────────────────────────────────────
@@ -64,6 +90,31 @@ services:
       retries: 5
       start_period: 30s
 
+    networks:
+      - bilhete-net
+
+  # Garante que o usuário de hml existe com host '%'.
+  mysql-hml-init:
+    image: mysql:8.4
+    container_name: bilhete-DB-hml-init
+    depends_on:
+      mysql-hml:
+        condition: service_healthy
+    environment:
+      MYSQL_HML_ROOT_PASSWORD: ${MYSQL_HML_ROOT_PASSWORD}
+      MYSQL_HML_DATABASE: ${MYSQL_HML_DATABASE}
+      MYSQL_HML_USER: ${MYSQL_HML_USER}
+      MYSQL_HML_PASSWORD: ${MYSQL_HML_PASSWORD}
+    entrypoint: >
+      bash -c "
+      mysql -h bilhete-DB-hml -u root -p\"$${MYSQL_HML_ROOT_PASSWORD}\" -e \"
+      CREATE USER IF NOT EXISTS '$${MYSQL_HML_USER}'@'%' IDENTIFIED BY '$${MYSQL_HML_PASSWORD}';
+      ALTER USER '$${MYSQL_HML_USER}'@'%' IDENTIFIED BY '$${MYSQL_HML_PASSWORD}';
+      GRANT ALL PRIVILEGES ON $${MYSQL_HML_DATABASE}.* TO '$${MYSQL_HML_USER}'@'%';
+      FLUSH PRIVILEGES;\"
+      && echo '[init] Usuario hml OK'
+      "
+    restart: "no"
     networks:
       - bilhete-net
 
