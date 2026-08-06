@@ -58,15 +58,10 @@ function resolveDockerDbHost(dbHostFromFile) {
     return null;
   }
 
-  // Se o DB_HOST aponta para localhost, o MySQL está no host (fora do Docker).
-  // Usa host.docker.internal para acessar o host a partir do container.
   if (normalized === 'localhost' || normalized === '127.0.0.1' || normalized === '::1') {
     return 'host.docker.internal';
   }
 
-  // Se o DB_HOST aponta para um nome de container (ex: bilhete-DB),
-  // assume que está na rede Docker compartilhada (bilhete-net).
-  // Mantém o DB_HOST original — o container resolve pelo nome na rede.
   return null;
 }
 
@@ -87,17 +82,12 @@ if (action === 'run') {
     );
   }
 
-  // Garante que a rede compartilhada bilhete-net exista (para conectar ao MySQL no Docker).
-  run('docker', ['network', 'create', 'bilhete-net'], { stdio: 'ignore' });
-
   run('docker', ['rm', '-f', containerName], { stdio: 'ignore' });
   const dockerArgs = [
     'run',
     '-d',
     '--name',
     containerName,
-    '--network',
-    'bilhete-net',
     '--add-host',
     'host.docker.internal:host-gateway',
     '--env-file',

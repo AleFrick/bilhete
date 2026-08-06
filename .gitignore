@@ -4,6 +4,7 @@ backend/node_modules/
 backend/.env
 #backend/.env.development
 backend/.env.production
+backend/.env.hml
 database/.env
 *.log
 .DS_Store

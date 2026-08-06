@@ -1,27 +1,64 @@
 services:
-  mysql:
+  # ─────────────────────────────────────────────────────────
+  # Banco de PRODUÇÃO
+  # ─────────────────────────────────────────────────────────
+  mysql-prod:
     image: mysql:8.4
-    container_name: bilhete-DB
+    container_name: bilhete-DB-prod
     restart: unless-stopped
 
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-      MYSQL_DATABASE: ${MYSQL_DATABASE}
-      MYSQL_USER: ${MYSQL_USER}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_PROD_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_PROD_DATABASE}
+      MYSQL_USER: ${MYSQL_PROD_USER}
+      MYSQL_PASSWORD: ${MYSQL_PROD_PASSWORD}
 
     ports:
-      - "${MYSQL_PORT:-3306}:3306"
+      - "${MYSQL_PROD_PORT:-3306}:3306"
 
     volumes:
-      - mysql_data:/var/lib/mysql
+      - mysql_prod_data:/var/lib/mysql
 
     command: >
       --character-set-server=utf8mb4
       --collation-server=utf8mb4_unicode_ci
 
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_PROD_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+    networks:
+      - bilhete-net
+
+  # ─────────────────────────────────────────────────────────
+  # Banco de HOMOLOGAÇÃO (HML)
+  # ─────────────────────────────────────────────────────────
+  mysql-hml:
+    image: mysql:8.4
+    container_name: bilhete-DB-hml
+    restart: unless-stopped
+
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_HML_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_HML_DATABASE}
+      MYSQL_USER: ${MYSQL_HML_USER}
+      MYSQL_PASSWORD: ${MYSQL_HML_PASSWORD}
+
+    ports:
+      - "${MYSQL_HML_PORT:-3307}:3306"
+
+    volumes:
+      - mysql_hml_data:/var/lib/mysql
+
+    command: >
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_HML_ROOT_PASSWORD}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -31,7 +68,8 @@ services:
       - bilhete-net
 
 volumes:
-  mysql_data:
+  mysql_prod_data:
+  mysql_hml_data:
 
 networks:
   bilhete-net:
