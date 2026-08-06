@@ -2,6 +2,16 @@ import { z } from 'zod';
 
 import { pool } from '../config/db.js';
 import { createNotification } from '../services/notificationService.js';
+import { resolveBenefit } from '../services/premiumBenefits.js';
+
+/**
+ * Limite diário base de bilhetes para usuários não-premium.
+ * Usuários premium com o benefício EXTRA_DAILY_BILHETES enviam este valor
+ * + o extra configurado em params.dailyLimit.
+ *
+ * Para alterar o limite base, basta editar esta constante.
+ */
+const BASE_DAILY_BILHETE_LIMIT = 3;
 
 const createBilheteSchema = z.object({
   toUserId: z.number().int().positive(),
@@ -33,6 +43,34 @@ export async function sendBilhete(req, res) {
 
     if (checkins.length < 2) {
       return res.status(400).json({ message: 'Ambos usuarios precisam estar no mesmo local ativo.' });
+    }
+
+    // Cota diária de bilhetes (reset à meia-noite).
+    // Premium com EXTRA_DAILY_BILHETES ganha extra além do limite base.
+    let dailyLimit = BASE_DAILY_BILHETE_LIMIT;
+    const extraBenefit = await resolveBenefit(req.user.id, 'user', 'EXTRA_DAILY_BILHETES');
+    if (extraBenefit) {
+      const extra = Number(extraBenefit.params?.dailyLimit || 0);
+      if (extra > 0) {
+        dailyLimit += extra;
+      }
+    }
+
+    const [todayCountRows] = await pool.query(
+      `select count(*) as total
+       from bilhetes
+       where from_user = ?
+         and created_at >= curdate()`,
+      [req.user.id]
+    );
+    const sentToday = Number(todayCountRows[0]?.total || 0);
+
+    if (sentToday >= dailyLimit) {
+      return res.status(429).json({
+        message: `Voce atingiu o limite de ${dailyLimit} bilhete(s) por dia. Tente novamente amanha.`,
+        dailyLimit,
+        sentToday,
+      });
     }
 
     const [insertResult] = await pool.query(

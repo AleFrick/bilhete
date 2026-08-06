@@ -13,8 +13,13 @@ import { pool } from '../config/db.js';
  * catálogo (via migration ou admin). Nesta fase todos começam enforced=0.
  */
 export const BENEFIT_HANDLERS = {
+  EXTRA_DAILY_BILHETES: {
+    description: 'Aumenta a cota diária de bilhetes enviados.',
+    // O handler real está no bilheteController.sendBilhete, que consulta
+    // resolveBenefit(userId, 'user', 'EXTRA_DAILY_BILHETES') para obter
+    // params.dailyLimit e somar ao BASE_DAILY_BILHETE_LIMIT.
+  },
   // FREE_MSG_NO_MATCH: handler piloto (a implementar em fase posterior)
-  // EXTRA_DAILY_BILHETES: a implementar
   // PROFILE_VISITORS: a implementar
   // VENUE_HIGHLIGHT: a implementar
   // INVISIBLE_MODE: a implementar
