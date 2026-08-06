@@ -409,7 +409,7 @@ export default function PremiumMarketplacePage({ apiClient }) {
                             >
                               ✓
                             </span>
-                            <span>{benefit}</span>
+                            <span>{typeof benefit === 'string' ? benefit : benefit.label || benefit.code}</span>
                           </li>
                         ))}
                       </ul>

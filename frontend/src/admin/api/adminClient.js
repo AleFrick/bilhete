@@ -342,6 +342,20 @@ export const adminApi = {
     request('/admin/premium/promotions', { method: 'POST', body: JSON.stringify(payload) }),
   updateAdminPremiumPromotion: (promotionId, payload) =>
     request(`/admin/premium/promotions/${promotionId}`, { method: 'PUT', body: JSON.stringify(payload) }),
+  adminPremiumBenefitCatalog: ({ targetGroup } = {}) => {
+    const params = new URLSearchParams();
+    if (targetGroup) {
+      params.set('targetGroup', targetGroup);
+    }
+    const query = params.toString();
+    return request(`/admin/premium/benefits/catalog${query ? `?${query}` : ''}`);
+  },
+  createAdminPremiumBenefitCatalog: (payload) =>
+    request('/admin/premium/benefits/catalog', { method: 'POST', body: JSON.stringify(payload) }),
+  updateAdminPremiumBenefitCatalog: (benefitId, payload) =>
+    request(`/admin/premium/benefits/catalog/${benefitId}`, { method: 'PUT', body: JSON.stringify(payload) }),
+  deleteAdminPremiumBenefitCatalog: (benefitId) =>
+    request(`/admin/premium/benefits/catalog/${benefitId}`, { method: 'DELETE' }),
   importPbf: (file, city, bbox) => {
     const formData = new FormData();
     formData.append('file', file);

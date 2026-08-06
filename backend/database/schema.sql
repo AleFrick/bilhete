@@ -117,12 +117,31 @@ create table if not exists premium_subscriptions (
   starts_at timestamp not null,
   ends_at timestamp not null,
   status enum('active', 'expired', 'cancelled') not null default 'active',
+  package_id bigint null,
+  benefits_snapshot json null,
   created_at timestamp not null default current_timestamp,
   updated_at timestamp not null default current_timestamp on update current_timestamp,
   unique key uniq_premium_subscriptions_user_group (user_id, target_group),
   constraint fk_premium_subscriptions_user
     foreign key (user_id) references users(id) on delete cascade
 );
+
+create table if not exists premium_benefit_catalog (
+  id bigint primary key auto_increment,
+  code varchar(60) not null,
+  label varchar(140) not null,
+  description text,
+  target_group enum('user', 'establishment') not null,
+  param_schema json null,
+  enforced tinyint(1) not null default 0,
+  active tinyint(1) not null default 1,
+  created_at timestamp not null default current_timestamp,
+  updated_at timestamp not null default current_timestamp on update current_timestamp,
+  unique key uniq_premium_benefit_catalog_code (code)
+);
+
+create index idx_premium_benefit_catalog_group_active
+  on premium_benefit_catalog(target_group, active, code);
 
 create table if not exists venues (
   id bigint primary key auto_increment,

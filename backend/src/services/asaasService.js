@@ -1,5 +1,6 @@
 import { pool } from '../config/db.js';
 import { env } from '../config/env.js';
+import { normalizeBenefits } from './premiumBenefits.js';
 
 async function getPaymentSettings() {
   const [rows] = await pool.query(
@@ -177,7 +178,7 @@ export async function processWebhook(payload) {
     await pool.query(`update premium_orders set status = 'paid', paid_at = current_timestamp where id = ?`, [order.id]);
 
     const [orderRows] = await pool.query(
-      `select o.user_id as userId, o.target_group as targetGroup, p.duration_days as durationDays
+      `select o.user_id as userId, o.target_group as targetGroup, o.package_id as packageId, p.duration_days as durationDays, p.benefits
        from premium_orders o
        join premium_packages p on p.id = o.package_id
        where o.id = ? limit 1`,
@@ -186,15 +187,24 @@ export async function processWebhook(payload) {
 
     if (orderRows.length > 0) {
       const ord = orderRows[0];
+      let benefitsSnapshotJson = null;
+      try {
+        const rawBenefits = typeof ord.benefits === 'string' ? JSON.parse(ord.benefits) : ord.benefits;
+        const normalized = normalizeBenefits(rawBenefits);
+        benefitsSnapshotJson = normalized.length ? JSON.stringify(normalized) : null;
+      } catch {}
+
       await pool.query(
-        `insert into premium_subscriptions (user_id, target_group, starts_at, ends_at, status)
-         values (?, ?, current_timestamp, date_add(current_timestamp, interval ? day), 'active')
+        `insert into premium_subscriptions (user_id, target_group, starts_at, ends_at, status, package_id, benefits_snapshot)
+         values (?, ?, current_timestamp, date_add(current_timestamp, interval ? day), 'active', ?, ?)
          on duplicate key update
            starts_at = case when ends_at > current_timestamp then starts_at else current_timestamp end,
            ends_at = case when ends_at > current_timestamp then date_add(ends_at, interval ? day) else date_add(current_timestamp, interval ? day) end,
            status = 'active',
+           package_id = values(package_id),
+           benefits_snapshot = values(benefits_snapshot),
            updated_at = current_timestamp`,
-        [ord.userId, ord.targetGroup, ord.durationDays, ord.durationDays, ord.durationDays]
+        [ord.userId, ord.targetGroup, ord.durationDays, ord.packageId, benefitsSnapshotJson, ord.durationDays, ord.durationDays]
       );
 
       if (ord.targetGroup === 'user') {

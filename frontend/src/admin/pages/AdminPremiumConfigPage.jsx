@@ -37,6 +37,7 @@ function toDatetimeLocalValue(value) {
 
 const TABS = [
   { key: 'packages', label: 'Pacotes' },
+  { key: 'benefits', label: 'Benefícios' },
   { key: 'promotions', label: 'Promoções' },
   { key: 'coupons', label: 'Cupons' },
 ];
@@ -45,12 +46,42 @@ const MODAL_NONE = null;
 const MODAL_PACKAGE = 'package';
 const MODAL_COUPON = 'coupon';
 const MODAL_PROMOTION = 'promotion';
+const MODAL_BENEFIT = 'benefit';
+
+/** Normaliza um item de benefício (legado string ou objeto) para o shape canônico. */
+function normalizeBenefitItem(item) {
+  if (item === null || item === undefined) return null;
+  if (typeof item === 'string') {
+    const trimmed = item.trim();
+    return trimmed ? { code: 'LEGACY', label: trimmed, params: {} } : null;
+  }
+  if (typeof item === 'object') {
+    const code = String(item.code || '').trim();
+    if (!code) return null;
+    return {
+      code,
+      label: String(item.label || '').trim(),
+      params: item.params && typeof item.params === 'object' ? item.params : {},
+    };
+  }
+  return null;
+}
+
+function normalizeBenefitsForForm(raw) {
+  if (!Array.isArray(raw) || !raw.length) return [makeEmptyBenefitItem()];
+  const normalized = raw.map(normalizeBenefitItem).filter(Boolean);
+  return normalized.length ? normalized : [makeEmptyBenefitItem()];
+}
+
+function makeEmptyBenefitItem() {
+  return { code: '', label: '', params: {} };
+}
 
 const makeEmptyPackageForm = (targetGroup) => ({
   targetGroup,
   title: '',
   description: '',
-  benefits: [''],
+  benefits: [makeEmptyBenefitItem()],
   isFree: false,
   priceCents: '', // dígitos brutos em centavos (ex: "1990" = R$19,90)
   durationDays: '',
@@ -77,12 +108,142 @@ const EMPTY_PROMOTION_FORM = {
   endsAt: '',
 };
 
+const EMPTY_BENEFIT_FORM = {
+  code: '',
+  label: '',
+  description: '',
+  targetGroup: 'user',
+  paramSchema: '',
+  enforced: false,
+  active: true,
+};
+
+/** Parseia o texto JSON do campo paramSchema do formulário do catálogo. */
+function parseParamSchemaText(text) {
+  const trimmed = String(text || '').trim();
+  if (!trimmed) return {};
+  try {
+    const parsed = JSON.parse(trimmed);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Formata o param_schema (objeto) para edição no textarea do catálogo. */
+function formatParamSchemaText(schema) {
+  if (!schema || typeof schema !== 'object') return '';
+  try {
+    return JSON.stringify(schema, null, 2);
+  } catch {
+    return '';
+  }
+}
+
+/** Renderiza os campos dinâmicos de params a partir do param_schema do catálogo. */
+function renderParamFields(paramSchema, params, onChange) {
+  const entries = Object.entries(paramSchema || {});
+  if (!entries.length) {
+    return <p style={{ margin: 0, fontSize: '0.8rem', opacity: 0.6 }}>Sem parâmetros para este benefício.</p>;
+  }
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 16px' }}>
+      {entries.map(([key, def]) => {
+        const type = def?.type || 'string';
+        const value = params?.[key] ?? def?.default ?? '';
+        const handle = (nextValue) => onChange({ ...params, [key]: nextValue });
+        if (type === 'boolean') {
+          return (
+            <label key={key} className="admin-checkbox" style={{ minWidth: '120px' }}>
+              <input type="checkbox" checked={Boolean(value)} onChange={(e) => handle(e.target.checked)} />
+              {key}
+            </label>
+          );
+        }
+        return (
+          <label key={key} style={{ minWidth: '120px' }}>
+            {key}
+            <input
+              type={type === 'number' ? 'number' : 'text'}
+              value={value}
+              onChange={(e) => handle(type === 'number' ? Number(e.target.value) : e.target.value)}
+            />
+          </label>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Extrai os valores default de params a partir do param_schema do catálogo. */
+function defaultParamsFromSchema(paramSchema) {
+  const out = {};
+  for (const [key, def] of Object.entries(paramSchema || {})) {
+    if (def && Object.prototype.hasOwnProperty.call(def, 'default')) {
+      out[key] = def.default;
+    }
+  }
+  return out;
+}
+
+/** Converte objeto params em array de pares { key, value } para edição no modal. */
+function paramsToPairs(params) {
+  if (!params || typeof params !== 'object') return [];
+  return Object.entries(params).map(([key, value]) => ({
+    key,
+    value: typeof value === 'boolean' ? String(value) : String(value ?? ''),
+  }));
+}
+
+/** Converte array de pares { key, value } de volta para objeto params.
+ *  Tenta converter valores numéricos e booleanos. */
+function pairsToParams(pairs) {
+  const out = {};
+  for (const pair of pairs) {
+    const key = String(pair.key || '').trim();
+    if (!key) continue;
+    const raw = String(pair.value ?? '').trim();
+    if (raw === '') {
+      out[key] = '';
+    } else if (raw === 'true' || raw === 'false') {
+      out[key] = raw === 'true';
+    } else if (/^-?\d+(\.\d+)?$/.test(raw)) {
+      out[key] = Number(raw);
+    } else {
+      out[key] = raw;
+    }
+  }
+  return out;
+}
+
+/** Resumo legível dos params para exibir abaixo do botão. */
+function summarizeParams(params) {
+  if (!params || typeof params !== 'object') return 'Sem parâmetros';
+  const entries = Object.entries(params);
+  if (!entries.length) return 'Sem parâmetros';
+  return entries.map(([k, v]) => `${k}: ${v}`).join(', ');
+}
+
+/** Verifica se o código do benefício no índice dado está repetido em outro item. */
+function isDuplicateBenefitCode(benefits, index) {
+  const code = benefits[index]?.code;
+  if (!code) return false;
+  return benefits.some((b, i) => i !== index && b.code === code);
+}
+
+/** Retorna true se há qualquer código duplicado no array de benefícios. */
+function hasDuplicateBenefitCodes(benefits) {
+  const codes = benefits.map((b) => b.code).filter(Boolean);
+  return new Set(codes).size !== codes.length;
+}
+
 export default function AdminPremiumConfigPage() {
   const [targetGroup, setTargetGroup] = useState('user');
   const [activeTab, setActiveTab] = useState('packages');
   const [packages, setPackages] = useState([]);
   const [coupons, setCoupons] = useState([]);
   const [promotions, setPromotions] = useState([]);
+  const [benefitCatalog, setBenefitCatalog] = useState([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [pageError, setPageError] = useState('');
@@ -102,20 +263,40 @@ export default function AdminPremiumConfigPage() {
   const [editingPromotionId, setEditingPromotionId] = useState(null);
   const [promotionForm, setPromotionForm] = useState(EMPTY_PROMOTION_FORM);
 
+  const [editingBenefitId, setEditingBenefitId] = useState(null);
+  const [benefitForm, setBenefitForm] = useState(EMPTY_BENEFIT_FORM);
+
+  const [paramsModalOpen, setParamsModalOpen] = useState(false);
+  const [paramsEditingIndex, setParamsEditingIndex] = useState(null);
+  const [paramsDraft, setParamsDraft] = useState([{ key: '', value: '' }]);
+
   const activePromotion = useMemo(() => promotions.find((item) => item.status === 'active') || null, [promotions]);
+
+  /** Catálogo filtrado pelo targetGroup atual (para popular o select de benefits do pacote). */
+  const catalogForGroup = useMemo(
+    () => benefitCatalog.filter((item) => item.targetGroup === targetGroup && item.active),
+    [benefitCatalog, targetGroup]
+  );
 
   const loadData = async () => {
     setLoading(true);
     setPageError('');
     try {
-      const [packagesData, couponsData, promotionsData] = await Promise.all([
+      const results = await Promise.allSettled([
         adminApi.adminPremiumPackages({ targetGroup }),
         adminApi.adminPremiumCoupons({ targetGroup }),
         adminApi.adminPremiumPromotions({ targetGroup }),
+        adminApi.adminPremiumBenefitCatalog({ targetGroup }),
       ]);
-      setPackages(packagesData || []);
-      setCoupons(couponsData || []);
-      setPromotions(promotionsData || []);
+      const [packagesR, couponsR, promotionsR, catalogR] = results;
+      const errors = results.filter((r) => r.status === 'rejected').map((r) => r.reason?.message).filter(Boolean);
+      if (errors.length) {
+        setPageError(`Falha ao carregar: ${errors.join('; ')}`);
+      }
+      setPackages(packagesR.status === 'fulfilled' ? packagesR.value || [] : []);
+      setCoupons(couponsR.status === 'fulfilled' ? couponsR.value || [] : []);
+      setPromotions(promotionsR.status === 'fulfilled' ? promotionsR.value || [] : []);
+      setBenefitCatalog(catalogR.status === 'fulfilled' ? catalogR.value || [] : []);
     } catch (requestError) {
       setPageError(requestError.message || 'Erro ao carregar configuração premium.');
     } finally {
@@ -155,6 +336,9 @@ export default function AdminPremiumConfigPage() {
     setCouponForm(EMPTY_COUPON_FORM);
     setEditingPromotionId(null);
     setPromotionForm(EMPTY_PROMOTION_FORM);
+    setEditingBenefitId(null);
+    setBenefitForm(EMPTY_BENEFIT_FORM);
+    closeParamsModal();
   };
 
   const handleSavePackage = async (event) => {
@@ -162,12 +346,24 @@ export default function AdminPremiumConfigPage() {
     setSaving(true);
     setModalError('');
     setPageSuccess('');
+
+    const normalizedBenefits = packageForm.benefits
+      .map(normalizeBenefitItem)
+      .filter(Boolean)
+      .filter((b) => b.code !== 'LEGACY' || b.label);
+
+    if (hasDuplicateBenefitCodes(normalizedBenefits)) {
+      setModalError('Não é permitido repetir o mesmo código de benefício em um pacote.');
+      setSaving(false);
+      return;
+    }
+
     try {
       const payload = {
         targetGroup: packageForm.targetGroup,
         title: packageForm.title,
         description: packageForm.description,
-        benefits: packageForm.benefits.filter((b) => b.trim()),
+        benefits: normalizedBenefits,
         isFree: Boolean(packageForm.isFree),
         priceCents: packageForm.isFree ? 0 : Number(packageForm.priceCents || 0),
         durationDays: packageForm.isFree ? 3650 : Number(packageForm.durationDays),
@@ -256,6 +452,86 @@ export default function AdminPremiumConfigPage() {
     }
   };
 
+  const handleSaveBenefit = async (event) => {
+    event.preventDefault();
+    setSaving(true);
+    setModalError('');
+    setPageSuccess('');
+    try {
+      const paramSchema = parseParamSchemaText(benefitForm.paramSchema);
+      if (paramSchema === null) {
+        setModalError('param_schema inválido. Use um JSON objeto (ex: {"dailyLimit":{"type":"number","default":1}}).');
+        setSaving(false);
+        return;
+      }
+      const payload = {
+        code: benefitForm.code,
+        label: benefitForm.label,
+        description: benefitForm.description,
+        targetGroup: benefitForm.targetGroup,
+        paramSchema,
+        enforced: Boolean(benefitForm.enforced),
+        active: Boolean(benefitForm.active),
+      };
+
+      if (editingBenefitId) {
+        await adminApi.updateAdminPremiumBenefitCatalog(editingBenefitId, payload);
+        setPageSuccess('Benefício do catálogo atualizado.');
+      } else {
+        await adminApi.createAdminPremiumBenefitCatalog(payload);
+        setPageSuccess('Benefício do catálogo criado.');
+      }
+      closeModal();
+      await loadData();
+    } catch (requestError) {
+      setModalError(requestError.message || 'Erro ao salvar benefício do catálogo.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteBenefit = async (benefitId) => {
+    if (!window.confirm('Remover este benefício do catálogo? Pacotes que o referenciem ficarão com referência inválida.')) {
+      return;
+    }
+    setPageError('');
+    setPageSuccess('');
+    try {
+      await adminApi.deleteAdminPremiumBenefitCatalog(benefitId);
+      setPageSuccess('Benefício removido do catálogo.');
+      await loadData();
+    } catch (requestError) {
+      setPageError(requestError.message || 'Erro ao remover benefício.');
+    }
+  };
+
+  const openParamsModal = (index) => {
+    const benefit = packageForm.benefits[index];
+    setParamsEditingIndex(index);
+    const pairs = paramsToPairs(benefit?.params);
+    setParamsDraft(pairs.length ? pairs : [{ key: '', value: '' }]);
+    setParamsModalOpen(true);
+  };
+
+  const closeParamsModal = () => {
+    setParamsModalOpen(false);
+    setParamsEditingIndex(null);
+    setParamsDraft([{ key: '', value: '' }]);
+  };
+
+  const handleSaveParams = () => {
+    const nextParams = pairsToParams(paramsDraft);
+    if (paramsEditingIndex !== null) {
+      const newBenefits = [...packageForm.benefits];
+      newBenefits[paramsEditingIndex] = {
+        ...newBenefits[paramsEditingIndex],
+        params: nextParams,
+      };
+      setPackageForm((prev) => ({ ...prev, benefits: newBenefits }));
+    }
+    closeParamsModal();
+  };
+
   return (
     <div className="admin-page-stack">
       {/* Cabeçalho unificado */}
@@ -318,6 +594,7 @@ export default function AdminPremiumConfigPage() {
                 {[
                   { label: 'Nova promoção', modal: MODAL_PROMOTION },
                   { label: 'Novo pacote', modal: MODAL_PACKAGE },
+                  { label: 'Novo benefício', modal: MODAL_BENEFIT },
                   { label: 'Novo cupom', modal: MODAL_COUPON },
                 ].map((item) => (
                   <button
@@ -337,6 +614,9 @@ export default function AdminPremiumConfigPage() {
                     onClick={() => {
                       if (item.modal === MODAL_PACKAGE) {
                         setPackageForm(makeEmptyPackageForm(targetGroup));
+                      }
+                      if (item.modal === MODAL_BENEFIT) {
+                        setBenefitForm({ ...EMPTY_BENEFIT_FORM, targetGroup });
                       }
                       openModal(item.modal);
                     }}
@@ -401,6 +681,11 @@ export default function AdminPremiumConfigPage() {
                         {item.isFree ? 'Grátis' : `Valor: ${(item.priceCents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`}
                         {' | Duração: '}{item.durationDays} dia(s) | {item.active ? 'Ativo' : 'Inativo'}
                       </p>
+                      {item.benefits && item.benefits.length ? (
+                        <p style={{ fontSize: '0.82rem', opacity: 0.8 }}>
+                          Benefícios: {item.benefits.map((b) => b.label || b.code).join(', ')}
+                        </p>
+                      ) : null}
                     </div>
                     <button
                       type="button"
@@ -411,7 +696,7 @@ export default function AdminPremiumConfigPage() {
                           targetGroup: item.targetGroup || targetGroup,
                           title: item.title || '',
                           description: item.description || '',
-                          benefits: (item.benefits && item.benefits.length) ? item.benefits : [''],
+                          benefits: normalizeBenefitsForForm(item.benefits),
                           isFree: Boolean(item.isFree),
                           priceCents: String(item.priceCents || ''),
                           durationDays: String(item.durationDays || ''),
@@ -424,6 +709,77 @@ export default function AdminPremiumConfigPage() {
                     >
                       Editar
                     </button>
+                  </li>
+                ))}
+              </ul>
+            )
+          ) : null}
+
+          {/* Aba Benefícios (catálogo) */}
+          {activeTab === 'benefits' ? (
+            loading ? (
+              <p>Carregando benefícios...</p>
+            ) : !benefitCatalog.length ? (
+              <p>Nenhum benefício cadastrado para este grupo.</p>
+            ) : (
+              <ul className="simple-list">
+                {benefitCatalog.map((item) => (
+                  <li key={item.id}>
+                    <div>
+                      <strong>{item.label}</strong>
+                      <span style={{ marginLeft: '8px', fontSize: '0.72rem', fontFamily: 'monospace', opacity: 0.7 }}>
+                        {item.code}
+                      </span>
+                      {item.enforced ? (
+                        <span style={{ marginLeft: '8px', fontSize: '0.72rem', fontWeight: 700, padding: '2px 8px', borderRadius: '999px', background: 'rgba(34,197,94,0.15)', color: '#22c55e' }}>
+                          APLICADO
+                        </span>
+                      ) : (
+                        <span style={{ marginLeft: '8px', fontSize: '0.72rem', fontWeight: 700, padding: '2px 8px', borderRadius: '999px', background: 'rgba(234,179,8,0.15)', color: '#eab308' }}>
+                          CADASTRADO
+                        </span>
+                      )}
+                      {!item.active ? (
+                        <span style={{ marginLeft: '8px', fontSize: '0.72rem', fontWeight: 700, padding: '2px 8px', borderRadius: '999px', background: 'rgba(239,68,68,0.15)', color: '#ef4444' }}>
+                          INATIVO
+                        </span>
+                      ) : null}
+                      <p>{item.description || 'Sem descrição'}</p>
+                      <p style={{ fontSize: '0.78rem', opacity: 0.7 }}>
+                        Grupo: {item.targetGroup === 'user' ? 'Usuários' : 'Estabelecimentos'}
+                        {item.paramSchema && Object.keys(item.paramSchema).length
+                          ? ` | Params: ${Object.keys(item.paramSchema).join(', ')}`
+                          : ' | Sem parâmetros'}
+                      </p>
+                    </div>
+                    <div className="inline-row" style={{ gap: '6px' }}>
+                      <button
+                        type="button"
+                        className="btn btn--ghost btn--xs"
+                        onClick={() => {
+                          setEditingBenefitId(item.id);
+                          setBenefitForm({
+                            code: item.code || '',
+                            label: item.label || '',
+                            description: item.description || '',
+                            targetGroup: item.targetGroup || targetGroup,
+                            paramSchema: formatParamSchemaText(item.paramSchema),
+                            enforced: Boolean(item.enforced),
+                            active: Boolean(item.active),
+                          });
+                          openModal(MODAL_BENEFIT);
+                        }}
+                      >
+                        Editar
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn--ghost btn--xs"
+                        onClick={() => handleDeleteBenefit(item.id)}
+                      >
+                        Remover
+                      </button>
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -581,7 +937,7 @@ export default function AdminPremiumConfigPage() {
 
       {/* Modal: Pacote */}
       <Modal
-        isOpen={activeModal === MODAL_PACKAGE}
+        isOpen={activeModal === MODAL_PACKAGE && !paramsModalOpen}
         onClose={closeModal}
         title={editingPackageId ? 'Editar pacote' : 'Novo pacote'}
         className="modal--wide"
@@ -634,38 +990,102 @@ export default function AdminPremiumConfigPage() {
                 />
               </label>
               <label style={{ gridColumn: '1 / -1' }}>
-                Benefícios (um por linha)
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {packageForm.benefits.map((benefit, index) => (
-                    <div key={index} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                      <input
-                        value={benefit}
-                        onChange={(event) => {
-                          const newBenefits = [...packageForm.benefits];
-                          newBenefits[index] = event.target.value;
-                          setPackageForm((prev) => ({ ...prev, benefits: newBenefits }));
+                Benefícios
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {packageForm.benefits.map((benefit, index) => {
+                    const catalogEntry = catalogForGroup.find((c) => c.code === benefit.code);
+                    return (
+                      <div
+                        key={index}
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '8px',
+                          padding: '10px',
+                          border: '1px solid var(--color-border, rgba(255,255,255,0.12))',
+                          borderRadius: '8px',
                         }}
-                        placeholder="Ex: Perfil destacado nas buscas"
-                      />
-                      {packageForm.benefits.length > 1 ? (
-                        <button
-                          type="button"
-                          className="btn btn--ghost btn--xs"
-                          onClick={() => {
-                            const newBenefits = packageForm.benefits.filter((_, i) => i !== index);
-                            setPackageForm((prev) => ({ ...prev, benefits: newBenefits.length ? newBenefits : [''] }));
-                          }}
-                        >
-                          ✕
-                        </button>
-                      ) : null}
-                    </div>
-                  ))}
+                      >
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                          <select
+                            value={benefit.code}
+                            onChange={(event) => {
+                              const nextCode = event.target.value;
+                              const entry = catalogForGroup.find((c) => c.code === nextCode);
+                              const newBenefits = [...packageForm.benefits];
+                              newBenefits[index] = {
+                                code: nextCode,
+                                label: entry?.label || '',
+                                params: defaultParamsFromSchema(entry?.paramSchema),
+                              };
+                              setPackageForm((prev) => ({ ...prev, benefits: newBenefits }));
+                            }}
+                            style={{ flex: '0 0 180px', maxWidth: '180px', fontSize: '0.82rem' }}
+                          >
+                            <option value="">Selecione...</option>
+                            {catalogForGroup.map((c) => (
+                              <option key={c.code} value={c.code}>
+                                {c.code}
+                              </option>
+                            ))}
+                            {benefit.code === 'LEGACY' ? (
+                              <option value="LEGACY">LEGACY</option>
+                            ) : null}
+                          </select>
+                          <input
+                            value={benefit.label}
+                            onChange={(event) => {
+                              const newBenefits = [...packageForm.benefits];
+                              newBenefits[index] = { ...benefit, label: event.target.value };
+                              setPackageForm((prev) => ({ ...prev, benefits: newBenefits }));
+                            }}
+                            placeholder="Descritivo do benefício"
+                            style={{ flex: 1 }}
+                          />
+                          {packageForm.benefits.length > 1 ? (
+                            <button
+                              type="button"
+                              className="btn btn--ghost btn--xs"
+                              onClick={() => {
+                                const newBenefits = packageForm.benefits.filter((_, i) => i !== index);
+                                setPackageForm((prev) => ({
+                                  ...prev,
+                                  benefits: newBenefits.length ? newBenefits : [makeEmptyBenefitItem()],
+                                }));
+                              }}
+                            >
+                              ✕
+                            </button>
+                          ) : null}
+                        </div>
+                        {benefit.code && isDuplicateBenefitCode(packageForm.benefits, index) ? (
+                          <p style={{ margin: 0, fontSize: '0.75rem', color: '#ef4444' }}>
+                            Código "{benefit.code}" repetido em outro benefício deste pacote.
+                          </p>
+                        ) : null}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <button
+                            type="button"
+                            className="btn btn--ghost btn--xs"
+                            style={{ alignSelf: 'flex-start' }}
+                            onClick={() => openParamsModal(index)}
+                          >
+                            Configurar parâmetros
+                          </button>
+                          <p style={{ margin: 0, fontSize: '0.78rem', opacity: 0.7 }}>
+                            {summarizeParams(benefit.params)}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
                   <button
                     type="button"
                     className="btn btn--ghost btn--xs"
                     style={{ alignSelf: 'flex-start' }}
-                    onClick={() => setPackageForm((prev) => ({ ...prev, benefits: [...prev.benefits, ''] }))}
+                    onClick={() =>
+                      setPackageForm((prev) => ({ ...prev, benefits: [...prev.benefits, makeEmptyBenefitItem()] }))
+                    }
                   >
                     + Adicionar benefício
                   </button>
@@ -830,6 +1250,170 @@ export default function AdminPremiumConfigPage() {
               </button>
             </div>
           </form>
+        </div>
+      </Modal>
+
+      {/* Modal: Benefício (catálogo) */}
+      <Modal
+        isOpen={activeModal === MODAL_BENEFIT}
+        onClose={closeModal}
+        title={editingBenefitId ? 'Editar benefício' : 'Novo benefício'}
+        className="modal--wide"
+      >
+        <div style={{ minWidth: 'min(720px, 90vw)' }}>
+          <AppNotice message={modalError} type="error" onClose={() => setModalError('')} />
+          <form className="admin-form" onSubmit={handleSaveBenefit}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 16px' }}>
+              <label>
+                Código
+                <input
+                  value={benefitForm.code}
+                  onChange={(event) =>
+                    setBenefitForm((prev) => ({ ...prev, code: event.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, '') }))
+                  }
+                  placeholder="EX: FREE_MSG_NO_MATCH"
+                  required
+                  disabled={Boolean(editingBenefitId)}
+                />
+              </label>
+              <label>
+                Grupo
+                <select
+                  value={benefitForm.targetGroup}
+                  onChange={(event) => setBenefitForm((prev) => ({ ...prev, targetGroup: event.target.value }))}
+                  disabled={Boolean(editingBenefitId)}
+                >
+                  {TARGET_GROUP_OPTIONS.map((group) => (
+                    <option key={group.value} value={group.value}>
+                      {group.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label style={{ gridColumn: '1 / -1' }}>
+                Rótulo (exibição)
+                <input
+                  value={benefitForm.label}
+                  onChange={(event) => setBenefitForm((prev) => ({ ...prev, label: event.target.value }))}
+                  required
+                />
+              </label>
+              <label style={{ gridColumn: '1 / -1' }}>
+                Descrição
+                <textarea
+                  value={benefitForm.description}
+                  onChange={(event) => setBenefitForm((prev) => ({ ...prev, description: event.target.value }))}
+                  rows={2}
+                />
+              </label>
+              <label style={{ gridColumn: '1 / -1' }}>
+                param_schema (JSON)
+                <textarea
+                  value={benefitForm.paramSchema}
+                  onChange={(event) => setBenefitForm((prev) => ({ ...prev, paramSchema: event.target.value }))}
+                  rows={6}
+                  placeholder='{"dailyLimit":{"type":"number","min":0,"default":1}}'
+                  style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}
+                />
+              </label>
+              <label className="admin-checkbox" style={{ alignSelf: 'end', paddingBottom: '8px' }}>
+                <input
+                  type="checkbox"
+                  checked={benefitForm.enforced}
+                  onChange={(event) => setBenefitForm((prev) => ({ ...prev, enforced: event.target.checked }))}
+                />
+                Aplicado (enforced)
+              </label>
+              <label className="admin-checkbox" style={{ alignSelf: 'end', paddingBottom: '8px' }}>
+                <input
+                  type="checkbox"
+                  checked={benefitForm.active}
+                  onChange={(event) => setBenefitForm((prev) => ({ ...prev, active: event.target.checked }))}
+                />
+                Ativo
+              </label>
+            </div>
+            <p style={{ fontSize: '0.78rem', opacity: 0.7, marginTop: '8px' }}>
+              "Aplicado (enforced)" só pode ser ativado se o backend já possui handler para o código.
+              Codes sem handler ficam cadastrados e configuráveis, mas não destravam funcionalidade até deploy.
+            </p>
+            <div className="inline-row" style={{ marginTop: '16px' }}>
+              <button type="submit" className="btn btn--primary" disabled={saving}>
+                {saving ? 'Salvando...' : editingBenefitId ? 'Salvar' : 'Criar benefício'}
+              </button>
+              <button type="button" className="btn btn--ghost" onClick={closeModal} disabled={saving}>
+                Cancelar
+              </button>
+            </div>
+          </form>
+        </div>
+      </Modal>
+
+      {/* Modal: Parâmetros do benefício (pares chave-valor) */}
+      <Modal
+        isOpen={paramsModalOpen}
+        onClose={closeParamsModal}
+        title="Configurar parâmetros"
+        className="modal--wide"
+      >
+        <div style={{ minWidth: 'min(560px, 90vw)' }}>
+          <p style={{ fontSize: '0.82rem', opacity: 0.7, margin: '0 0 12px' }}>
+            Informe os parâmetros adicionais do benefício como pares de item e valor.
+            Valores numéricos e booleanos (true/false) são convertidos automaticamente.
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {paramsDraft.map((pair, index) => (
+              <div key={index} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <input
+                  value={pair.key}
+                  onChange={(event) => {
+                    const next = [...paramsDraft];
+                    next[index] = { ...pair, key: event.target.value };
+                    setParamsDraft(next);
+                  }}
+                  placeholder="Item (ex: dailyLimit)"
+                  style={{ flex: 1 }}
+                />
+                <input
+                  value={pair.value}
+                  onChange={(event) => {
+                    const next = [...paramsDraft];
+                    next[index] = { ...pair, value: event.target.value };
+                    setParamsDraft(next);
+                  }}
+                  placeholder="Valor (ex: 1)"
+                  style={{ flex: 1 }}
+                />
+                <button
+                  type="button"
+                  className="btn btn--ghost btn--xs"
+                  onClick={() => {
+                    const next = paramsDraft.filter((_, i) => i !== index);
+                    setParamsDraft(next.length ? next : [{ key: '', value: '' }]);
+                  }}
+                  title="Excluir item"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              className="btn btn--ghost btn--xs"
+              style={{ alignSelf: 'flex-start' }}
+              onClick={() => setParamsDraft((prev) => [...prev, { key: '', value: '' }])}
+            >
+              + Adicionar item
+            </button>
+          </div>
+          <div className="inline-row" style={{ marginTop: '16px' }}>
+            <button type="button" className="btn btn--primary" onClick={handleSaveParams}>
+              Salvar parâmetros
+            </button>
+            <button type="button" className="btn btn--ghost" onClick={closeParamsModal}>
+              Cancelar
+            </button>
+          </div>
         </div>
       </Modal>
     </div>

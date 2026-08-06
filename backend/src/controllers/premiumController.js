@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { pool } from '../config/db.js';
 import { env } from '../config/env.js';
 import { createAsaasPayment, getPaymentSettings } from '../services/asaasService.js';
+import { loadBenefitCatalog, normalizeBenefits, ENFORCED_CODES } from '../services/premiumBenefits.js';
 
 const TARGET_GROUPS = ['user', 'establishment'];
 
@@ -17,12 +18,18 @@ const orderParamSchema = z.object({
   orderId: z.coerce.number().int().positive(),
 });
 
+const benefitItemSchema = z.object({
+  code: z.string().trim().min(1).max(60),
+  label: z.string().trim().max(140).optional().or(z.literal('')),
+  params: z.record(z.unknown()).optional().default({}),
+});
+
 const packageCreateSchema = z.object({
   targetGroup: z.enum(TARGET_GROUPS),
   promotionId: z.coerce.number().int().positive().nullable().optional(),
   title: z.string().trim().min(2).max(140),
   description: z.string().trim().max(700).optional().or(z.literal('')),
-  benefits: z.array(z.string().trim().min(1).max(200)).max(30).optional(),
+  benefits: z.array(benefitItemSchema).max(30).optional(),
   isFree: z.boolean().optional(),
   priceCents: z.coerce.number().int().min(0),
   durationDays: z.coerce.number().int().min(1).max(3650),
@@ -76,6 +83,30 @@ const promotionParamSchema = z.object({
   promotionId: z.coerce.number().int().positive(),
 });
 
+const benefitCatalogCreateSchema = z.object({
+  code: z
+    .string()
+    .trim()
+    .min(2)
+    .max(60)
+    .regex(/^[A-Z0-9_]+$/, 'Codigo deve conter apenas letras maiusculas, numeros e underline.'),
+  label: z.string().trim().min(2).max(140),
+  description: z.string().trim().max(700).optional().or(z.literal('')),
+  targetGroup: z.enum(TARGET_GROUPS),
+  paramSchema: z.record(z.unknown()).optional().default({}),
+  enforced: z.boolean().optional(),
+  active: z.boolean().optional(),
+});
+
+const benefitCatalogUpdateSchema = benefitCatalogCreateSchema.partial().refine(
+  (payload) => Object.keys(payload).length > 0,
+  { message: 'Nenhum campo informado para atualizar beneficio.' }
+);
+
+const benefitCatalogParamSchema = z.object({
+  benefitId: z.coerce.number().int().positive(),
+});
+
 const adminListQuerySchema = z.object({
   targetGroup: z.enum(TARGET_GROUPS).optional(),
 });
@@ -103,12 +134,20 @@ function normalizeDateTimeInput(value) {
   return asSql.slice(0, 19);
 }
 
+function safeJsonParse(raw) {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
 function mapPackageRow(row) {
   let benefits = [];
   if (row.benefits) {
     try {
-      benefits = typeof row.benefits === 'string' ? JSON.parse(row.benefits) : row.benefits;
-      if (!Array.isArray(benefits)) benefits = [];
+      const raw = typeof row.benefits === 'string' ? JSON.parse(row.benefits) : row.benefits;
+      benefits = normalizeBenefits(raw);
     } catch {
       benefits = [];
     }
@@ -128,6 +167,58 @@ function mapPackageRow(row) {
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
+}
+
+function mapBenefitCatalogRow(row) {
+  let paramSchema = {};
+  if (row.paramSchema) {
+    try {
+      paramSchema = typeof row.paramSchema === 'string' ? JSON.parse(row.paramSchema) : row.paramSchema;
+      if (!paramSchema || typeof paramSchema !== 'object') paramSchema = {};
+    } catch {
+      paramSchema = {};
+    }
+  }
+  return {
+    id: row.id,
+    code: row.code,
+    label: row.label,
+    description: row.description,
+    targetGroup: row.targetGroup,
+    paramSchema,
+    enforced: Boolean(row.enforced),
+    active: Boolean(row.active),
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
+/**
+ * Valida os benefits (codes + params) de um pacote contra o catálogo ativo.
+ * Retorna array de mensagens de erro (vazio se ok).
+ */
+async function validateBenefitsAgainstCatalog(targetGroup, benefits) {
+  if (!Array.isArray(benefits) || !benefits.length) return [];
+  const catalog = await loadBenefitCatalog(targetGroup);
+  const byCode = new Map(catalog.map((item) => [item.code, item]));
+  const errors = [];
+  const seenCodes = new Set();
+  for (const item of benefits) {
+    if (seenCodes.has(item.code)) {
+      errors.push(`Beneficio com codigo "${item.code}" esta repetido no pacote.`);
+      continue;
+    }
+    seenCodes.add(item.code);
+    const entry = byCode.get(item.code);
+    if (!entry) {
+      errors.push(`Beneficio com codigo "${item.code}" nao existe no catalogo ativo para ${targetGroup}.`);
+      continue;
+    }
+    if (entry.targetGroup !== targetGroup) {
+      errors.push(`Beneficio "${item.code}" pertence ao grupo ${entry.targetGroup}, nao ${targetGroup}.`);
+    }
+  }
+  return errors;
 }
 
 function mapCouponRow(row) {
@@ -612,7 +703,8 @@ export async function confirmPremiumOrderPayment(req, res) {
         o.package_id as packageId,
         o.coupon_id as couponId,
         o.status,
-        p.duration_days as durationDays
+        p.duration_days as durationDays,
+        p.benefits
       from premium_orders o
       join premium_packages p on p.id = o.package_id
       where o.id = ?
@@ -637,9 +729,14 @@ export async function confirmPremiumOrderPayment(req, res) {
       await connection.query(`update premium_coupons set used_count = used_count + 1 where id = ?`, [order.couponId]);
     }
 
+    const benefitsSnapshot = normalizeBenefits(
+      typeof order.benefits === 'string' ? safeJsonParse(order.benefits) : order.benefits
+    );
+    const benefitsSnapshotJson = benefitsSnapshot.length ? JSON.stringify(benefitsSnapshot) : null;
+
     await connection.query(
-      `insert into premium_subscriptions (user_id, target_group, starts_at, ends_at, status)
-       values (?, ?, current_timestamp, date_add(current_timestamp, interval ? day), 'active')
+      `insert into premium_subscriptions (user_id, target_group, starts_at, ends_at, status, package_id, benefits_snapshot)
+       values (?, ?, current_timestamp, date_add(current_timestamp, interval ? day), 'active', ?, ?)
        on duplicate key update
          starts_at = case
            when ends_at > current_timestamp then starts_at
@@ -650,8 +747,10 @@ export async function confirmPremiumOrderPayment(req, res) {
            else date_add(current_timestamp, interval ? day)
          end,
          status = 'active',
+         package_id = values(package_id),
+         benefits_snapshot = values(benefits_snapshot),
          updated_at = current_timestamp`,
-      [req.user.id, targetGroup, order.durationDays, order.durationDays, order.durationDays]
+      [req.user.id, targetGroup, order.durationDays, order.packageId, benefitsSnapshotJson, order.durationDays, order.durationDays]
     );
 
     if (targetGroup === 'user') {
@@ -753,6 +852,12 @@ export async function createAdminPremiumPackage(req, res) {
   }
 
   const payload = parsed.data;
+  const benefits = normalizeBenefits(payload.benefits || []);
+  const catalogErrors = await validateBenefitsAgainstCatalog(payload.targetGroup, benefits);
+  if (catalogErrors.length) {
+    return res.status(400).json({ message: catalogErrors[0] });
+  }
+
   try {
     const [insertResult] = await pool.query(
       `insert into premium_packages (
@@ -772,7 +877,7 @@ export async function createAdminPremiumPackage(req, res) {
         payload.promotionId || null,
         payload.title,
         payload.description || null,
-        payload.benefits ? JSON.stringify(payload.benefits) : null,
+        benefits.length ? JSON.stringify(benefits) : null,
         payload.isFree ? 1 : 0,
         payload.priceCents,
         payload.durationDays,
@@ -808,6 +913,14 @@ export async function createAdminPremiumPackage(req, res) {
   }
 }
 
+async function loadPackageTargetGroup(packageId) {
+  const [rows] = await pool.query(
+    `select target_group as targetGroup from premium_packages where id = ? limit 1`,
+    [packageId]
+  );
+  return rows[0]?.targetGroup || null;
+}
+
 export async function updateAdminPremiumPackage(req, res) {
   const parsedParams = packageParamSchema.safeParse(req.params);
   if (!parsedParams.success) {
@@ -822,6 +935,19 @@ export async function updateAdminPremiumPackage(req, res) {
   const updates = [];
   const values = [];
   const payload = parsedBody.data;
+
+  let normalizedBenefits;
+  if (payload.benefits !== undefined) {
+    normalizedBenefits = normalizeBenefits(payload.benefits);
+    const targetGroupForValidation = payload.targetGroup || (await loadPackageTargetGroup(parsedParams.data.packageId));
+    if (!targetGroupForValidation) {
+      return res.status(404).json({ message: 'Pacote premium nao encontrado.' });
+    }
+    const catalogErrors = await validateBenefitsAgainstCatalog(targetGroupForValidation, normalizedBenefits);
+    if (catalogErrors.length) {
+      return res.status(400).json({ message: catalogErrors[0] });
+    }
+  }
 
   if (payload.targetGroup !== undefined) {
     updates.push('target_group = ?');
@@ -839,9 +965,9 @@ export async function updateAdminPremiumPackage(req, res) {
     updates.push('description = ?');
     values.push(payload.description || null);
   }
-  if (payload.benefits !== undefined) {
+  if (normalizedBenefits !== undefined) {
     updates.push('benefits = ?');
-    values.push(payload.benefits ? JSON.stringify(payload.benefits) : null);
+    values.push(normalizedBenefits.length ? JSON.stringify(normalizedBenefits) : null);
   }
   if (payload.isFree !== undefined) {
     updates.push('is_free = ?');
@@ -1331,4 +1457,208 @@ export async function updateAdminPremiumPromotion(req, res) {
   } finally {
     connection.release();
   }
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * Catálogo de benefícios (premium_benefit_catalog)
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+export async function listAdminPremiumBenefitCatalog(req, res) {
+  const parsed = adminListQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    return res.status(400).json({ message: 'Filtro invalido para catalogo de beneficios.' });
+  }
+
+  try {
+    const items = await loadBenefitCatalog(parsed.data.targetGroup);
+    return res.json(items);
+  } catch (error) {
+    return res.status(500).json({ message: 'Erro ao carregar catalogo de beneficios.' });
+  }
+}
+
+export async function createAdminPremiumBenefitCatalog(req, res) {
+  const parsed = benefitCatalogCreateSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ message: parsedBodyError(parsed) });
+  }
+
+  const payload = parsed.data;
+  const code = payload.code.trim().toUpperCase();
+  const enforced = payload.enforced !== undefined ? Boolean(payload.enforced) : false;
+
+  // enforced só pode ser true se o backend tem handler para o code.
+  if (enforced && !ENFORCED_CODES.has(code)) {
+    return res.status(400).json({
+      message: `Beneficio "${code}" nao possui handler no backend. Nao pode ser marcado como enforced.`,
+    });
+  }
+
+  try {
+    const [insertResult] = await pool.query(
+      `insert into premium_benefit_catalog (
+        code, label, description, target_group, param_schema, enforced, active
+      ) values (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        code,
+        payload.label,
+        payload.description || null,
+        payload.targetGroup,
+        payload.paramSchema ? JSON.stringify(payload.paramSchema) : null,
+        enforced ? 1 : 0,
+        payload.active === false ? 0 : 1,
+      ]
+    );
+
+    const [rows] = await pool.query(
+      `select
+        id, code, label, description,
+        target_group as targetGroup,
+        param_schema as paramSchema,
+        enforced, active,
+        created_at as createdAt,
+        updated_at as updatedAt
+      from premium_benefit_catalog
+      where id = ?
+      limit 1`,
+      [insertResult.insertId]
+    );
+
+    return res.status(201).json(rows[0] ? mapBenefitCatalogRow(rows[0]) : null);
+  } catch (error) {
+    if (String(error?.message || '').toLowerCase().includes('duplicate')) {
+      return res.status(409).json({ message: 'Codigo de beneficio ja cadastrado.' });
+    }
+    return res.status(500).json({ message: 'Erro ao criar beneficio do catalogo.' });
+  }
+}
+
+export async function updateAdminPremiumBenefitCatalog(req, res) {
+  const parsedParams = benefitCatalogParamSchema.safeParse(req.params);
+  if (!parsedParams.success) {
+    return res.status(400).json({ message: 'benefitId invalido.' });
+  }
+
+  const parsedBody = benefitCatalogUpdateSchema.safeParse(req.body);
+  if (!parsedBody.success) {
+    return res.status(400).json({ message: parsedBodyError(parsedBody) });
+  }
+
+  const payload = parsedBody.data;
+  const updates = [];
+  const values = [];
+
+  let nextCode;
+  let nextEnforced;
+
+  if (payload.code !== undefined) {
+    nextCode = payload.code.trim().toUpperCase();
+    updates.push('code = ?');
+    values.push(nextCode);
+  }
+  if (payload.label !== undefined) {
+    updates.push('label = ?');
+    values.push(payload.label);
+  }
+  if (payload.description !== undefined) {
+    updates.push('description = ?');
+    values.push(payload.description || null);
+  }
+  if (payload.targetGroup !== undefined) {
+    updates.push('target_group = ?');
+    values.push(payload.targetGroup);
+  }
+  if (payload.paramSchema !== undefined) {
+    updates.push('param_schema = ?');
+    values.push(payload.paramSchema ? JSON.stringify(payload.paramSchema) : null);
+  }
+  if (payload.enforced !== undefined) {
+    nextEnforced = Boolean(payload.enforced);
+    updates.push('enforced = ?');
+    values.push(nextEnforced ? 1 : 0);
+  }
+  if (payload.active !== undefined) {
+    updates.push('active = ?');
+    values.push(payload.active ? 1 : 0);
+  }
+
+  if (!updates.length) {
+    return res.status(400).json({ message: 'Nenhum campo informado para atualizar beneficio.' });
+  }
+
+  // Validar enforced: precisa carregar o code atual se não veio no payload.
+  let codeForEnforcedCheck = nextCode;
+  let enforcedRequested = nextEnforced;
+  if (enforcedRequested === true && !codeForEnforcedCheck) {
+    const [existing] = await pool.query(
+      `select code from premium_benefit_catalog where id = ? limit 1`,
+      [parsedParams.data.benefitId]
+    );
+    if (!existing.length) {
+      return res.status(404).json({ message: 'Beneficio nao encontrado.' });
+    }
+    codeForEnforcedCheck = existing[0].code;
+  }
+  if (enforcedRequested === true && !ENFORCED_CODES.has(codeForEnforcedCheck)) {
+    return res.status(400).json({
+      message: `Beneficio "${codeForEnforcedCheck}" nao possui handler no backend. Nao pode ser marcado como enforced.`,
+    });
+  }
+
+  values.push(parsedParams.data.benefitId);
+
+  try {
+    const [result] = await pool.query(
+      `update premium_benefit_catalog set ${updates.join(', ')} where id = ?`,
+      values
+    );
+    if (!result.affectedRows) {
+      return res.status(404).json({ message: 'Beneficio nao encontrado.' });
+    }
+
+    const [rows] = await pool.query(
+      `select
+        id, code, label, description,
+        target_group as targetGroup,
+        param_schema as paramSchema,
+        enforced, active,
+        created_at as createdAt,
+        updated_at as updatedAt
+      from premium_benefit_catalog
+      where id = ?
+      limit 1`,
+      [parsedParams.data.benefitId]
+    );
+
+    return res.json(rows[0] ? mapBenefitCatalogRow(rows[0]) : null);
+  } catch (error) {
+    if (String(error?.message || '').toLowerCase().includes('duplicate')) {
+      return res.status(409).json({ message: 'Codigo de beneficio ja cadastrado.' });
+    }
+    return res.status(500).json({ message: 'Erro ao atualizar beneficio do catalogo.' });
+  }
+}
+
+export async function deleteAdminPremiumBenefitCatalog(req, res) {
+  const parsedParams = benefitCatalogParamSchema.safeParse(req.params);
+  if (!parsedParams.success) {
+    return res.status(400).json({ message: 'benefitId invalido.' });
+  }
+
+  try {
+    const [result] = await pool.query(
+      `delete from premium_benefit_catalog where id = ?`,
+      [parsedParams.data.benefitId]
+    );
+    if (!result.affectedRows) {
+      return res.status(404).json({ message: 'Beneficio nao encontrado.' });
+    }
+    return res.status(204).json(null);
+  } catch (error) {
+    return res.status(500).json({ message: 'Erro ao remover beneficio do catalogo.' });
+  }
+}
+
+function parsedBodyError(parsed) {
+  return parsed.error?.issues?.[0]?.message || 'Dados invalidos para beneficio do catalogo.';
 }

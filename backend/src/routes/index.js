@@ -74,14 +74,18 @@ import { getCurrentCheckin, checkin, checkout } from '../controllers/checkinCont
 import { getMessages, listChats, listMatches, sendMessage } from '../controllers/chatController.js';
 import {
   confirmPremiumOrderPayment,
+  createAdminPremiumBenefitCatalog,
   createAdminPremiumCoupon,
   createAdminPremiumPackage,
   createAdminPremiumPromotion,
   createPremiumCheckout,
+  deleteAdminPremiumBenefitCatalog,
+  listAdminPremiumBenefitCatalog,
   listAdminPremiumCoupons,
   listAdminPremiumPackages,
   listAdminPremiumPromotions,
   listPremiumCatalog,
+  updateAdminPremiumBenefitCatalog,
   updateAdminPremiumCoupon,
   updateAdminPremiumPackage,
   updateAdminPremiumPromotion,
@@ -205,6 +209,10 @@ router.put('/admin/premium/coupons/:couponId', authRequired, adminRequired, upda
 router.get('/admin/premium/promotions', authRequired, adminRequired, listAdminPremiumPromotions);
 router.post('/admin/premium/promotions', authRequired, adminRequired, createAdminPremiumPromotion);
 router.put('/admin/premium/promotions/:promotionId', authRequired, adminRequired, updateAdminPremiumPromotion);
+router.get('/admin/premium/benefits/catalog', authRequired, adminRequired, listAdminPremiumBenefitCatalog);
+router.post('/admin/premium/benefits/catalog', authRequired, adminRequired, createAdminPremiumBenefitCatalog);
+router.put('/admin/premium/benefits/catalog/:benefitId', authRequired, adminRequired, updateAdminPremiumBenefitCatalog);
+router.delete('/admin/premium/benefits/catalog/:benefitId', authRequired, adminRequired, deleteAdminPremiumBenefitCatalog);
 router.post('/admin/import/pbf', authRequired, adminRequired, upload.single('file'), importPbfVenues);
 router.get('/admin/payment/settings', authRequired, adminRequired, getPaymentSettings);
 router.put('/admin/payment/settings', authRequired, adminRequired, updatePaymentSettings);
