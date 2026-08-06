@@ -10,6 +10,11 @@ const rawPool = mysql.createPool({
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
+  // MySQL 8 usa caching_sha2_password por padrão. Sem estas flags,
+  // o driver falha com "Public key retrieval is not allowed" quando
+  // conecta via rede não-criptografada (ex: túnel SSH).
+  allowPublicKeyRetrieval: true,
+  insecureAuth: true,
 });
 
 function compactSql(sql) {

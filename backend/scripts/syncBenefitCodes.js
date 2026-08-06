@@ -47,6 +47,8 @@ async function run() {
     password: env.mysqlPassword,
     database: env.mysqlDatabase,
     multipleStatements: true,
+    allowPublicKeyRetrieval: true,
+    insecureAuth: true,
   });
 
   let inserted = 0;
